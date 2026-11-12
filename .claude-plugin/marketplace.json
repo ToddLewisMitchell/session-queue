@@ -1,0 +1,14 @@
+{
+  "name": "session-queue",
+  "description": "Plugins for running Claude Code work as a queue of sessions.",
+  "owner": {
+    "name": "Todd Mitchell"
+  },
+  "plugins": [
+    {
+      "name": "session-queue",
+      "source": "./",
+      "description": "Run a project as a queue of Claude Code sessions, with parallel sessions in git worktrees on offer."
+    }
+  ]
+}
