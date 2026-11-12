@@ -37,9 +37,9 @@ To try a local copy instead, point Claude Code at the folder: `/plugin marketpla
 
 | You type | Claude does |
 |---|---|
-| "Start a queue for <goal>" | Writes the queue file from the template and asks for your checks and worktree setup |
+| "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching and notifications in one go, then writes the queue file |
 | "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
-| `next-session` | Runs the next placed TODO session |
+| `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Close the queue" | Closes it as a record and starts a successor with the open rows |
 

@@ -17,7 +17,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 
 - **Queue file: short** (≤ about 500 lines), because every session reads it all. Only the goal and a pointer to this skill, **Branching**, **Notify**, **Checks**, **Worktree setup**, the session table and ordering notes.
 - **Topic files: everything else.** The user's words, quoted and dated. Decisions, open questions, plans, and `## Session notes` appended by each session.
-- **Git.** Ask whether the queue folder is committed (many users ignore `prompts/` because notes are private). Record it, and never stage an ignored queue folder.
+- **Git.** The queue file records whether its folder is committed (many users ignore `prompts/` because notes are private). Never stage an ignored queue folder.
 - **Templates:** `templates/queue.md`, `templates/topic.md`.
 
 **Session table:** `| # | Session | Topic file | Status | Model |`
@@ -63,20 +63,16 @@ Never notify for routine progress.
 ## Workflows
 
 ### 1. Start a queue
-1. Ask for the goal, whether the queue folder is committed, and the **branching mode** (present `references/branching.md` with ★ and risk lines).
-   - If the host can push notifications, offer **Notify** (default off). Tell the user its limit: a session that dies from a usage limit, crash or closed terminal can't send anything, so silence doesn't mean it's still working.
-2. If there's an earlier queue, mark it closed ("a record only") and carry over its open rows and topic files.
-3. Write `prompt<Name>.md` from the template. Fill in **Checks** (tests, linters, type checks, build warnings, a code-review level) and **Worktree setup** (last section). Ask about anything unknown.
-4. If the host has memory, make a project memory naming the queue file and `next-session`.
+**Read `references/start-queue.md` before asking the user anything.** It covers an existing open queue, the goal and name, git, branching, Notify, Checks, Worktree setup, and roll-overs from workflow 5.
 
 ### 2. Add a task
 1. Write a topic file from the template: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
 2. Add a row with a targeted edit. Use `TODO (placement not decided)` unless the user gave a placement. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.
-3. **Parallel check.** If a session is running and this task could run alongside it (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
+3. **Parallel check.** If a session is running (in this conversation, or a worktree in `git worktree list`) and this task could run alongside it (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
 
 ### 3. `next-session`
-1. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it.
+1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it.
 2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, offer up to two parallel sessions (workflow 4), one line each with a risk line. The user decides based on workload and usage limits.
 3. Create the session branch if the mode calls for one.
 4. If the session starts with its discussion, hold it, **wait for the user's decisions before building** (notify if on), and record them in the topic file.
@@ -100,16 +96,10 @@ Never notify for routine progress.
 2. Apply the queue's **Worktree setup**.
 3. **Edit the queue, topic file and memory in the main checkout by full path, touching only this session's row.** This applies whether or not the queue folder is committed: an untracked one isn't in the worktree, and editing a committed one's copy in the worktree conflicts at merge.
 4. Run the Checks in the worktree.
-5. **Merge only with approval,** after the main session has committed. Rerun the Checks on the merged result, then remove the worktree.
+5. **Merge only with approval,** after the main session has committed, by the branch-per-session steps in every mode (`--no-ff`, rerun the Checks on the merged result, delete the branch). Then remove the worktree.
 
 ### 5. Close or roll over
 When the goal is met, the work moves to another goal, or the queue file passes about 500 lines:
 1. mark it closed ("a record only");
-2. start a successor with the open rows (workflow 1), keeping the branching mode and Notify unless the user changes them;
+2. start a successor with the open rows (workflow 1, as a roll-over);
 3. point the memory at the new file.
-
-## Worktree setup: what to ask for
-- **State:** the data folder or database the app writes to, and how to point a second copy elsewhere.
-- **Ports:** the dev servers' ports, and how to change them.
-- **Dependencies:** whether the virtualenv or `node_modules` can be shared by path, or must be installed per worktree (for example, native binaries for another OS).
-- **Singletons:** anything that allows only one running copy per machine.
