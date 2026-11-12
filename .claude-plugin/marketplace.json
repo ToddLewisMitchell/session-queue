@@ -1,6 +1,6 @@
 {
   "name": "session-queue",
-  "description": "Plugins for running Claude Code work as a queue of sessions.",
+  "description": "A Claude Code plugin for running long projects as a queue of short, focused sessions that save tokens and keep every decision on record.",
   "owner": {
     "name": "Todd Mitchell",
     "url": "https://github.com/ToddLewisMitchell"
@@ -9,7 +9,7 @@
     {
       "name": "session-queue",
       "source": "./",
-      "description": "Run a project as a queue of Claude Code sessions, with parallel sessions in git worktrees on offer."
+      "description": "Stay organized while saving tokens: enqueue your work in sessions with a customizable workflow, including optional parallel worktrees."
     }
   ]
 }
