@@ -2,7 +2,8 @@
   "name": "session-queue",
   "description": "Plugins for running Claude Code work as a queue of sessions.",
   "owner": {
-    "name": "Todd Mitchell"
+    "name": "Todd Mitchell",
+    "url": "https://github.com/ToddLewisMitchell"
   },
   "plugins": [
     {

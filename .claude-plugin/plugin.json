@@ -1,8 +1,13 @@
 {
   "name": "session-queue",
-  "version": "0.1.0",
-  "description": "Run a project as a queue of Claude Code sessions: a short queue file, one topic file per session, `next-session`, discussion-first sessions, a risk line on every option, no commit without approval, memory handoffs, and offers to run independent sessions in parallel git worktrees.",
-  "author": { "name": "Todd Mitchell" },
+  "version": "0.2.0",
+  "description": "Run a project as a queue of Claude Code sessions: a short queue file, one topic file per session, `next-session`, discussion-first sessions, a risk line on every option, no commit without approval, memory handoffs, offers to run independent sessions in parallel git worktrees, and optional push notifications when a session needs you.",
+  "author": {
+    "name": "Todd Mitchell",
+    "url": "https://github.com/ToddLewisMitchell"
+  },
+  "homepage": "https://github.com/ToddLewisMitchell/session-queue",
+  "repository": "https://github.com/ToddLewisMitchell/session-queue",
   "license": "CC-BY-NC-SA-4.0",
-  "keywords": ["workflow", "queue", "sessions", "worktree", "planning"]
+  "keywords": ["workflow", "queue", "sessions", "worktree", "planning", "notifications"]
 }
