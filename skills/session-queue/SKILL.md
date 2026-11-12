@@ -66,7 +66,7 @@ Never notify for routine progress.
 **Read `references/start-queue.md` before asking the user anything.** It covers an existing open queue, the goal and name, git, branching, Notify, Checks, Worktree setup, and roll-overs from workflow 5.
 
 ### 2. Add a task
-1. Write a topic file from the template: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
+1. **Pick the queue** as in workflow 3, step 1. Write a topic file from `templates/topic.md`: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
 2. Add a row with a targeted edit. Use `TODO (placement not decided)` unless the user gave a placement. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.
 3. **Parallel check.** If a session is running (in this conversation, or a worktree in `git worktree list`) and this task could run alongside it (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
@@ -92,14 +92,15 @@ Never notify for routine progress.
 **Running one** (`parallel-session <id>`, or a yes to an offer):
 1. Make a worktree on branch `q/<id>-<slug>`:
    - **typed in a new conversation:** `EnterWorktree` (this conversation becomes the parallel session);
-   - **from the conversation already running a session:** a background agent with `isolation: "worktree"`. Never `EnterWorktree` here, because it would move the current session. When the agent finishes, this session sends the notify if it's on.
+   - **from the conversation already running a session:** a background agent with `isolation: "worktree"`. Never `EnterWorktree` here, because it would move the current session. The agent leaves its work uncommitted in the worktree, since it can't ask for approval (see step 5).
 2. Apply the queue's **Worktree setup**.
 3. **Edit the queue, topic file and memory in the main checkout by full path, touching only this session's row.** This applies whether or not the queue folder is committed: an untracked one isn't in the worktree, and editing a committed one's copy in the worktree conflicts at merge.
 4. Run the Checks in the worktree.
-5. **Merge only with approval,** after the main session has committed, by the branch-per-session steps in every mode (`--no-ff`, rerun the Checks on the merged result, delete the branch). Then remove the worktree.
+5. **A background agent's work:** when it finishes, this session sends the notify if it's on, shows the diff and the Checks results, proposes a commit message, and after approval commits in the worktree.
+6. **Merge only with approval,** after the main session has committed, by the branch-per-session steps in every mode (`--no-ff`, rerun the Checks on the merged result, delete the branch). Then remove the worktree.
 
 ### 5. Close or roll over
 When the goal is met, the work moves to another goal, or the queue file passes about 500 lines:
 1. mark it closed ("a record only");
 2. start a successor with the open rows (workflow 1, as a roll-over);
-3. point the memory at the new file.
+3. point the memory at the new file (only this queue's entry, if there are two).

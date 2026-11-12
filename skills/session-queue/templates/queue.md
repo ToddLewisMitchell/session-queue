@@ -6,7 +6,7 @@
 
 **How the queue runs.** With the `session-queue` skill (workflows, principles, parallel sessions). Only this project's specifics are below. The queue folder is <committed | ignored by git: never stage it>.
 
-**Memory.** Handoffs go in the `<memory-name>` memory.
+**Memory.** Handoffs go in the `<memory-name>` memory <or, if the host has none, in each topic file's session notes>.
 
 **Branching.** <work on main | branch per session | branch for risky sessions> (chosen <date>; see the skill's Branching section).
 
