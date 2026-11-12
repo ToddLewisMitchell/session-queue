@@ -7,7 +7,7 @@
 - **Spend fewer tokens.** Each session starts fresh and reads only a short queue file and its own topic file. A long project doesn't turn into one ever-growing, ever-costlier conversation. See [How it keeps token use down](#how-it-keeps-token-use-down).
 - **Decide before Claude builds.** Big choices come up as options, each with a ★ recommendation and a risk line, and nothing gets built until you've chosen. Less rework, fewer surprises.
 - **You stay in charge.** Claude never commits, merges or publishes without your approval, and suggests a commit message at the end of each session.
-- **Quality doesn't slip.** Your tests, linters and build checks must stay clean after every session, with a code review before each commit.
+- **Quality doesn't slip.** Your tests, linters, and build checks must stay clean after every session, with a code review before each commit.
 - **Go faster when you have room.** Claude points out which sessions can safely run in parallel git worktrees. You say yes or no depending on your workload and usage limits.
 - **Nothing to run or host.** It's plain Markdown in your repo, readable and editable by you, and it works with Claude Code's own worktrees and memory.
 
@@ -15,7 +15,7 @@
 A Claude Code plugin for running a long project as a **queue of sessions**, kept in plain Markdown.
 
 - A short **queue file** (`prompts/prompt<Name>.md`) holds the goal, the project's checks, how to set up a parallel worktree, and a table of sessions.
-- One **topic file** per session holds its discussion, decisions and notes.
+- One **topic file** per session holds its discussion, decisions, and notes.
 - Type **`next-session`** and Claude reads both, presents the scope, does the work, keeps the checks green, and proposes a commit message. It never commits without your approval.
 - Sessions can **start with a discussion**. Every option comes with a risk line and a ★ recommendation.
 - **Your choice of branching**, made when the queue starts after Claude explains the trade-offs:
@@ -37,7 +37,7 @@ To try a local copy instead, point Claude Code at the folder: `/plugin marketpla
 
 | You type | Claude does |
 |---|---|
-| "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching and notifications in one go, then writes the queue file |
+| "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, and notifications in one go, then writes the queue file |
 | "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
 | `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
@@ -48,7 +48,7 @@ Every token in a conversation's context is paid for again on every turn. A long 
 
 **Less to read at the start of each session**
 - **Fresh session per queue item.** Each session starts with an empty context and reads only what it needs. Old conversations aren't carried forward.
-- **A short queue file.** It holds only the goal, the project's checks, the worktree setup and one line per session, at about 500 lines at most. Every session reads it, so it's kept small on purpose.
+- **A short queue file.** It holds only the goal, the project's checks, the worktree setup, and one line per session, at about 500 lines at most. Every session reads it, so it's kept small on purpose.
 - **One topic file per session.** A session reads its own topic file, not every past discussion. Finished topics stay on disk but aren't loaded.
 - **Closed queues are records.** When a queue is done or gets long, a successor carries over only the open rows. The old file isn't read again.
 - **Short memory handoffs.** The next session learns where things stand from a few lines, not from re-reading the last conversation.

@@ -1,11 +1,11 @@
 ---
 name: session-queue
-description: Run a project as a Markdown queue of sessions (queue file + topic files, discussion first, risk lines, approval before commits, optional parallel worktrees and notifications). Use for `next-session`, `parallel-session <id>`, or starting, adding to, reordering or closing a queue (`prompts/prompt*.md`).
+description: Run a project as a Markdown queue of sessions (queue file + topic files, discussion first, risk lines, approval before commits, and optional parallel worktrees and notifications). Use for `next-session`, `parallel-session <id>`, or starting, adding to, reordering, or closing a queue (`prompts/prompt*.md`).
 ---
 
 # Session queue
 
-Long projects are split into **sessions**, each sized to fit one conversation. A short **queue file** says what's next. A **topic file** per session holds its discussion, plan and notes. Every session starts from those files, so nothing depends on an earlier conversation.
+Long projects are split into **sessions**, each sized to fit one conversation. A short **queue file** says what's next. A **topic file** per session holds its discussion, plan, and notes. Every session starts from those files, so nothing depends on an earlier conversation.
 
 ## Files
 
@@ -15,7 +15,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
   <name>/<topic>.md               one topic file per session or to-do
 ```
 
-- **Queue file: short** (≤ about 500 lines), because every session reads it all. Only the goal and a pointer to this skill, **Branching**, **Notify**, **Checks**, **Worktree setup**, the session table and ordering notes.
+- **Queue file: short** (≤ about 500 lines), because every session reads it all. Only the goal and a pointer to this skill, **Branching**, **Notify**, **Checks**, **Worktree setup**, the session table, and ordering notes.
 - **Topic files: everything else.** The user's words, quoted and dated. Decisions, open questions, plans, and `## Session notes` appended by each session.
 - **Git.** The queue file records whether its folder is committed (many users ignore `prompts/` because notes are private). Never stage an ignored queue folder.
 - **Templates:** `templates/queue.md`, `templates/topic.md`.
@@ -27,12 +27,12 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 
 ## Principles
 1. **A risk line on every option and recommendation.** Mark the recommended one ★.
-2. **Never commit, push, merge or publish without the user's approval.** Propose a commit message instead.
+2. **Never commit, push, merge, or publish without the user's approval.** Propose a commit message instead.
 3. **Sessions that "start with their discussion"** present choices with risk lines and wait for decisions before building.
 4. **Spike before queueing** a feasibility claim you can't verify. Split long plans into several sessions.
 5. **Don't re-derive or re-litigate** what a topic file records as decided.
 6. **Targeted edits only** to the queue file, never a full rewrite. Another session may be editing it.
-7. **Document as you go:** remarks in code, decisions and notes in the topic file, a handoff in memory (or, if the host has none, in the topic file's session notes).
+7. **Document as you go:** remarks in code, decisions and notes in the topic file, and a handoff in memory (or, if the host has none, in the topic file's session notes).
 
 ## Branching
 The user picks one of three modes when the queue starts. Always use the full mode names. Read `references/branching.md` only to explain the options, at queue start or when the user asks to change modes. Missing means **work on main**.
