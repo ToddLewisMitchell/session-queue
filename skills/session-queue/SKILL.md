@@ -1,6 +1,6 @@
 ---
 name: session-queue
-description: Run a project as a Markdown queue of sessions (queue file + topic files, discussion first, risk lines, approval before commits, and optional parallel worktrees and notifications). Use for `next-session`, `parallel-session <id>`, or starting, adding to, reordering, or closing a queue (`prompts/prompt*.md`).
+description: Run a project as a Markdown queue of sessions (queue file + topic files, discussion first, risk lines, approval before commits, and optional parallel worktrees and notifications). Use for `next-session`, `parallel-session <id>`, or starting, showing, adding to, reordering, dropping from, pausing, or closing a queue (`prompts/prompt*.md`).
 ---
 
 # Session queue
@@ -15,15 +15,15 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
   <name>/<topic>.md               one topic file per session or to-do
 ```
 
-- **Queue file: short** (≤ about 500 lines), because every session reads it all. Only the goal and a pointer to this skill, **Branching**, **Notify**, **Checks**, **Worktree setup**, the session table, and ordering notes.
+- **Queue file: short** (≤ about 500 lines), because every session reads it all. Only what `templates/queue.md` holds.
 - **Topic files: everything else.** The user's words, quoted and dated. Decisions, open questions, plans, and `## Session notes` appended by each session.
 - **Git.** The queue file records whether its folder is committed (many users ignore `prompts/` because notes are private). Never stage an ignored queue folder.
 - **Templates:** `templates/queue.md`, `templates/topic.md`.
 
 **Session table:** `| # | Session | Topic file | Status | Model |`
 - **#**: a short id (`1`, `2b`, `R3`). Never renumber; insert rows in order with a new id.
-- **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, `TODO (folded into X, pending)` (workflow 2, step 4), `IN PROGRESS <date> (<stage>; <session>)`, or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
-- **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (<stage>; <session>)` when it starts. The stage is `discussion` or `building` at first, moves from `discussion` to `building` once the user decides, and becomes `waiting for approval` when the session proposes the commit. `<session>` is the name other conversations use to message this one (see **Messages between sessions**). It stays on the claim through every stage; leave it out if the host has no messaging. Other conversations can't see this one, so the row is how they know it's taken, at what stage, and whom to tell about changes. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`), so ask rather than take a claimed row over. If the named session isn't in `ListAgents`, say so when asking ("session `<name>` isn't running"); the user still decides.
+- **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, `TODO (folded into X, pending)` (workflow 2, step 4), `IN PROGRESS <date> (<stage>; <session>)`, `PAUSED <date> (<why>; <where the partial work is>)` (workflow 3, Stopping early), `DROPPED <date> (<why>)` (workflow 2), or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
+- **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (<stage>; <session>)` when it starts. Stages: `discussion` (if it starts with one), then `building` once the user decides, then `waiting for approval` once the commit is proposed. `<session>` is the name other conversations message it by (see **Messages between sessions**); it stays through every stage, and is left out if the host has no messaging. The row is how other conversations know it's taken, at what stage, and whom to tell. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`, or `PAUSED` if it left partial work), so ask rather than take a claimed row over. If its named session isn't in `ListAgents`, say so when asking.
 - **Model:** to switch, tell the user (`/model`) and **wait**.
 
 ## Principles
@@ -44,6 +44,8 @@ The user picks one of three modes when the queue starts. Always use the full mod
 - **branch for risky sessions**: main, except rows marked **Branch** (judged risky by the user or a topic file). Those follow branch per session.
 
 An abandoned branch session leaves main untouched. Ask before deleting an unmerged branch.
+
+**Merge conflicts:** stop. Show the conflicting files and a proposed resolution, with a risk line, and resolve only after the user says go. Then rerun the Checks before going on.
 
 ## Notifications
 The queue's **Notify** line is `on` or `off`; missing means **off**. Offer it only if the host can push notifications (for example `PushNotification`, which reaches the phone when Remote Control is connected).
@@ -86,24 +88,25 @@ Rules:
 1. **Pick the queue** as in workflow 3, step 1. If the user chose to fold the task into another session, go to step 4 instead of steps 2–3. Otherwise, write a topic file from `templates/topic.md`: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
 2. Add a row with a targeted edit. Use `TODO (placement not decided)` unless the user gave a placement. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.
+   - **Dropping** a task, only on the user's word: set its row to `DROPPED <date> (<why>)` and keep the row and topic file as a record. For a task folded into a `TODO` or `PAUSED` row, take `+ <short title>` out of that row's Session cell and mark its `## Folded in` section dropped. If the row has partial work on a branch, ask before deleting the branch (see **Branching**). Never drop an `IN PROGRESS` row from outside its session; message it (see **Messages between sessions**), or let the user tell it.
 3. **Parallel check.** A session is running if it runs in this conversation, has a worktree in `git worktree list`, or has an `IN PROGRESS` row. Uncommitted changes in the main checkout that this conversation didn't make may mean a session is running in another conversation: ask the user, don't infer. If this task could run alongside a running session (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
-   - If a session is running in another conversation, this conversation can reach it only by a message (see **Messages between sessions**). Without messaging, say plainly that the user is the only messenger.
+   - A session in another conversation is reachable only by message (see **Messages between sessions**); without messaging, tell the user they're the messenger.
 4. **Folding a task into another session X** (instead of giving it its own). This is the user's choice: Claude may suggest it, with ★ and a risk line, next to giving the task its own row. Write the task into X's topic file, not a topic file of its own. Add a `## Folded in` section there with the user's words and the date, what's known, and open questions with ★ and risk lines.
    - into the session running in this conversation: no row of its own and no message. Tell the user it's added to this session's scope. Risk: low.
-   - into a `TODO` row: no row of its own. Add `+ <short title>` to X's Session cell, so the table still shows it. Safe, because X reads its topic file when it starts. Risk: low.
+   - into a `TODO` or `PAUSED` row: no row of its own. Add `+ <short title>` to X's Session cell, so the table still shows it. Safe, because X reads its topic file when it starts or resumes. Risk: low.
    - into an `IN PROGRESS` row: also add a placeholder row `TODO (folded into X, pending)` whose topic file is X's, and message X (see **Messages between sessions**). Without messaging, or if the claim names no session, do this only if the user confirms they'll pass it on to that conversation. Say in the risk line that X may already be past building; the placeholder keeps the task from being lost if so. Risk: medium.
    - X settles a pending row when it commits: DONE if it did the task, or back to `TODO` with the section moved into a topic file of its own. The only other change allowed is the sender returning it to `TODO` when X replies "too late" (see **Messages between sessions**). Never mark it done from outside X.
 
 ### 3. `next-session`
-1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it. Skip `IN PROGRESS` rows and rows folded into another. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
+1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` or `PAUSED` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it. Skip `IN PROGRESS` and `DROPPED` rows, and rows folded into another. A `PAUSED` row resumes from its session notes and partial work, in its worktree or on its branch, and finishes by the branch-per-session steps in every mode. If it paused on a blocker, ask whether it's cleared. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
 2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, offer up to two parallel sessions (workflow 4), one line each with a risk line. The user decides based on workload and usage limits. Claim the row (`IN PROGRESS`, see Status).
 3. Create the session branch if the mode calls for one.
 4. If the session starts with its discussion, hold it, **wait for the user's decisions before building** (notify if on), and record them in the topic file.
-   - **Split before building.** Once the plan is set (here, or at step 2 if there's no discussion), check whether any parts touch different files and don't depend on each other's design. If so, offer to split them off, with a risk line that says how sure you are they're independent. Each part run in parallel costs a cold start, a second run of the Checks, and a merge, so offer it only for parts big enough to be worth that. With a yes, give each part its own placed `TODO` row (not ordered after this one) and a topic file holding the decisions it needs, so it doesn't start with a discussion. Keep one part in this session, and offer the new rows per workflow 4.
-5. Do the work, keeping the **Checks** clean. If a message says this session's topic file or row changed, re-read it, and tell the user about any new task before building it (see **Messages between sessions**).
+   - **Split before building.** Once the plan is set (here, or at step 2 if there's no discussion), check whether any parts touch different files and don't depend on each other's design. If so, offer to split them off, with a risk line that says how sure you are they're independent. Offer it only for parts big enough to repay a cold start, another Checks run, and a merge. With a yes, give each part its own placed `TODO` row (not ordered after this one) and a topic file holding the decisions it needs, so it doesn't start with a discussion. Keep one part in this session, and offer the new rows per workflow 4.
+5. Do the work, keeping the **Checks** clean. If they're quick, run them first for a baseline. A Check that fails without this session's changes (in the baseline run, or on the starting commit): say so, record it in the session notes, and leave it unless the user says to fix it. If a message says this session's topic file or row changed, re-read it, and tell the user about any new task before building it (see **Messages between sessions**).
 6. **End of session:**
    - re-read the topic file and the queue row for items added since the session started (such as a `## Folded in` section). Do them, or ask the user to carry them over, before the rest of this list;
-   - the Checks pass (give the counts);
+   - the Checks pass, or fail only as the recorded baseline did (give the counts);
    - the queue's code review has run on the diff, with findings applied or explained;
    - session notes are in the topic file;
    - memory (or the session notes) has a DONE note and a handoff;
@@ -111,6 +114,11 @@ Rules:
    - a commit message is proposed (notify if on).
 
    After approval: commit, and merge if on a branch. Mark the row DONE (see Status), and settle any pending rows folded into it (workflow 2, step 4). Name the next session and its model; if the model differs, tell the user to switch (`/model`) before typing `next-session`.
+
+**Stopping early.** On a blocker, when the user stops it, or when it can't finish before the conversation is summarized, pause instead of pushing on (notify if on):
+- **Partial work:** ask where it goes. ★ A work-in-progress commit on the session's branch (`q/<id>-<slug>`, created now if the mode had none, then switch back to main), so main stays clean. Risk: low. Or leave it uncommitted in place. Risk: medium, because the next session in this checkout starts on top of it. A parallel session's work stays in its worktree.
+- **Session notes:** what's done, what's left, why it stopped, and where the partial work is. Memory gets a one-line handoff.
+- **Row:** `PAUSED <date> (<why>; <where the partial work is>)`. Pending rows folded into it stay pending; it settles them when it commits after resuming.
 
 ### 4. Parallel sessions in git worktrees
 **Eligible:** a placed `TODO` row (not folded into another) that isn't ordered after the current session, and whose files don't overlap the current session's (judged from both topic files and `git status`). **Say how sure you are.** A row that starts with its discussion can't run as a background agent (it can't ask the user), so offer it only for a new conversation. Recommend at most two, because each one uses up limits faster and adds a merge.
@@ -130,3 +138,6 @@ When the goal is met, the work moves to another goal, or the queue file passes a
 1. mark it closed ("a record only");
 2. start a successor with the open rows (workflow 1, as a roll-over);
 3. point the memory at the new file (only this queue's entry, if there are two).
+
+### 6. Show the queue
+For "where's the queue?" or similar. Read only the queue file and `git worktree list`; change nothing. Show each open row (id, title, status), what `next-session` would run next and on which model, any `PAUSED` reasons, and any `IN PROGRESS` claim whose named session isn't in `ListAgents` (possibly stale; without messaging, say you can't tell). With two open queues, show both, or the one the user named.

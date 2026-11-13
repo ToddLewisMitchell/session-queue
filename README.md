@@ -10,6 +10,8 @@
 | "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
 | `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
+| "Where's the queue?" | Shows each open row, what runs next, and any paused or stale sessions, without changing anything |
+| "Drop <task> from the queue" | Marks it dropped and keeps it on record |
 | "Close the queue" | Closes it as a record and starts a successor with the open rows |
 
 ## Why use it
@@ -26,14 +28,14 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 
 - A short **queue file** (`prompts/prompt<Name>.md`) holds the goal, the project's checks, how to set up a parallel worktree, and a table of sessions.
 - One **topic file** per session holds its discussion, decisions, and notes.
-- Type **`next-session`** and Claude reads both, presents the scope, does the work, keeps the checks green, and proposes a commit message. It never commits without your approval.
-- Sessions can **start with a discussion**. Every option comes with a risk line and a ★ recommendation.
+- Type **`next-session`** and Claude reads both, presents the scope, does the work, keeps the checks green, and proposes a commit message. Sessions can **start with a discussion** to settle choices first.
 - **Your choice of branching**, made when the queue starts after Claude explains the trade-offs:
   - work on main;
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
-- When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. If a session's plan has independent parts, Claude offers to split them into their own sessions that can run in parallel. It's only an offer: you decide based on your workload and usage limits.
-- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. Where the host lets sessions message each other, the claim names the session, and a conversation that changes its topic file tells it right away. A task folded into another session goes into that session's topic file. If that session is already running, a placeholder row stays open until it does the task. Every session also re-reads its topic file before proposing the commit, so a late addition isn't lost.
+- When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. If a session's plan has independent parts, Claude offers to split them into their own sessions. Nothing starts without your yes.
+- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
+- **Sessions can stop early.** If a session hits a blocker, you stop it, or it's too big to finish in one conversation, Claude pauses it. Its notes say what's done and what's left, and the partial work goes on a branch or stays in place, as you choose, so the next `next-session` picks up from there. Checks that were already failing before a session started are recorded as a baseline, not blamed on it. Merge conflicts are shown to you and resolved only with your go-ahead.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
 ## Install
@@ -49,7 +51,7 @@ Every token in a conversation's context is paid for again on every turn. A long 
 
 **Less to read at the start of each session**
 - **Fresh session per queue item.** Each session starts with an empty context and reads only what it needs. Old conversations aren't carried forward.
-- **A short queue file.** It holds only the goal, the project's checks, the worktree setup, and one line per session, at about 500 lines at most. Every session reads it, so it's kept small on purpose.
+- **A short queue file.** About 500 lines at most, with one line per session. Every session reads it, so it's kept small on purpose.
 - **One topic file per session.** A session reads its own topic file, not every past discussion. Finished topics stay on disk but aren't loaded.
 - **Closed queues are records.** When a queue is done or gets long, a successor carries over only the open rows. The old file isn't read again.
 - **Short memory handoffs.** The next session learns where things stand from a few lines, not from re-reading the last conversation.
@@ -63,7 +65,7 @@ Every token in a conversation's context is paid for again on every turn. A long 
 **Less spent per step**
 - **A model per session.** The Model column lets routine sessions run on a lighter model and saves the strongest one for the steps that need it.
 - **Targeted edits.** The queue file is changed with small edits, never rewritten in full.
-- **Parallel sessions only on offer.** At most one or two are suggested, each with a risk line, and you decide based on how close you are to your usage limits. Worktrees keep parallel sessions from clashing, which avoids redoing work after a conflict.
+- **Parallel sessions only on offer.** At most two are suggested, and you decide based on how close you are to your usage limits. Worktrees keep parallel sessions from clashing, which avoids redoing work after a conflict.
 
 The savings depend on the project and haven't been measured. The biggest are usually the fresh session per item and the short queue file.
 
