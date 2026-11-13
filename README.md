@@ -2,6 +2,16 @@
 
 **Save tokens and stay organized while working on a project with Claude Code!**
 
+## Use
+
+| You type | Claude does |
+|---|---|
+| "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, and notifications in one go, then writes the queue file |
+| "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
+| `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
+| `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
+| "Close the queue" | Closes it as a record and starts a successor with the open rows |
+
 ## Why use it
 - **Pick up exactly where you left off.** Type `next-session` in any new conversation and Claude knows what's next, what was decided, and why. No re-explaining, no "where were we?"
 - **Spend fewer tokens.** Each session starts fresh and reads only a short queue file and its own topic file. A long project doesn't turn into one ever-growing, ever-costlier conversation. See [How it keeps token use down](#how-it-keeps-token-use-down).
@@ -32,16 +42,6 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 ```
 
 To try a local copy instead, point Claude Code at the folder: `/plugin marketplace add /path/to/session-queue`.
-
-## Use
-
-| You type | Claude does |
-|---|---|
-| "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, and notifications in one go, then writes the queue file |
-| "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
-| `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
-| `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
-| "Close the queue" | Closes it as a record and starts a successor with the open rows |
 
 ## How it keeps token use down
 Every token in a conversation's context is paid for again on every turn. A long project run as one long conversation gets more expensive with each step, and gets summarized and loses detail. This method keeps each session's context small and focused.
