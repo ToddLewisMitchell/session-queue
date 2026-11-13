@@ -23,7 +23,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 **Session table:** `| # | Session | Topic file | Status | Model |`
 - **#**: a short id (`1`, `2b`, `R3`). Never renumber; insert rows in order with a new id.
 - **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, `TODO (folded into X, pending)` (workflow 2, step 4), `IN PROGRESS <date> (<stage>; <session>)`, or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
-- **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (discussion; <session>)` or `(building; <session>)` when it starts, moves it from `(discussion)` to `(building)` once the user decides, and sets `(waiting for approval)` when it proposes the commit. `<session>` is the name other conversations use to message this one (see **Messages between sessions**). It stays on the claim through every stage; leave it out if the host has no messaging. Other conversations can't see this one, so the row is how they know it's taken, at what stage, and whom to tell about changes. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`), so ask rather than take a claimed row over. If the named session isn't in `ListAgents`, say so when asking ("session `<name>` isn't running"); the user still decides.
+- **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (<stage>; <session>)` when it starts. The stage is `discussion` or `building` at first, moves from `discussion` to `building` once the user decides, and becomes `waiting for approval` when the session proposes the commit. `<session>` is the name other conversations use to message this one (see **Messages between sessions**). It stays on the claim through every stage; leave it out if the host has no messaging. Other conversations can't see this one, so the row is how they know it's taken, at what stage, and whom to tell about changes. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`), so ask rather than take a claimed row over. If the named session isn't in `ListAgents`, say so when asking ("session `<name>` isn't running"); the user still decides.
 - **Model:** to switch, tell the user (`/model`) and **wait**.
 
 ## Principles
@@ -64,7 +64,7 @@ Never notify for routine progress.
 ## Messages between sessions
 Some hosts let one conversation message another on the same machine (for example, `ListAgents` to find sessions and `SendMessage` to send). A session learns its own name from `ListAgents` and writes it in its claim. Without messaging, the user is the only messenger.
 
-When a conversation changes something that a running session needs, it messages the session named in that row's claim, after checking that `ListAgents` shows a session by that name:
+When a conversation changes something that a running session needs, it messages the session named in that row's claim:
 - a task folded in (workflow 2, step 4);
 - a decision, correction, or question added to its topic file;
 - a change to its row's scope or placement.
@@ -73,8 +73,9 @@ Rules:
 - **The change goes in the files first.** The message only says what changed and where. Lead with the queue and session id, e.g. `Queue 2b: a task was folded in; re-read "## Folded in" in prompts/app/sync.md`. Write paths as plain text; `@` attaches nothing in a message.
 - **Inform, never instruct.** Don't ask the other session to run, commit, approve, or delete anything; its user decides that.
 - **Receiving:** if this session holds no such row (a reused name or a stale claim), reply saying so and ignore the message. Otherwise re-read the named section before going on. A new task or a change to a decision goes to the user in one line; if it has open questions, or changes what's already decided, wait for their answers before building it. If it's too late to act on (for example, the session is already past building), reply and say so (reply to the message's `from`), and raise it again at the end of the session.
-- **Sent isn't read.** The other session's user may have to approve the message first, or it may never arrive. If the send fails (no session by that name, or a stale claim), tell the user, who then becomes the messenger. The end-of-session re-read (workflow 3, step 6) is the backstop either way.
-- **Background agents:** the conversation that launched one claims the row under its own name, and passes messages on to the agent.
+- **Replies:** the sender passes any reply to its user in one line. On "too late", it also turns a pending placeholder row into the task's own `TODO` row, with the `## Folded in` section moved into a topic file of its own.
+- **Sent isn't read.** The other session's user may have to approve the message first, or it may never arrive. If `ListAgents` doesn't show a session by that name, or the send fails, tell the user, who then becomes the messenger. The end-of-session re-read (workflow 3, step 6) is the backstop either way.
+- **Background agents:** the conversation that launched one claims the row under its own name. It can't pass on open questions, since the agent can't ask the user: it gets the user's answers first, writes them into the topic file, and then tells the agent.
 
 ## Workflows
 
@@ -82,15 +83,16 @@ Rules:
 **Read `references/start-queue.md` before asking the user anything.** It covers an existing open queue, the goal and name, git, branching, Notify, Checks, Worktree setup, and roll-overs from workflow 5.
 
 ### 2. Add a task
-1. **Pick the queue** as in workflow 3, step 1. If the task folds into another session, go to step 4 instead of steps 2–3. Otherwise, write a topic file from `templates/topic.md`: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
+1. **Pick the queue** as in workflow 3, step 1. If the user chose to fold the task into another session, go to step 4 instead of steps 2–3. Otherwise, write a topic file from `templates/topic.md`: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
 2. Add a row with a targeted edit. Use `TODO (placement not decided)` unless the user gave a placement. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.
 3. **Parallel check.** A session is running if it runs in this conversation, has a worktree in `git worktree list`, or has an `IN PROGRESS` row. Uncommitted changes in the main checkout that this conversation didn't make may mean a session is running in another conversation: ask the user, don't infer. If this task could run alongside a running session (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
    - If a session is running in another conversation, this conversation can reach it only by a message (see **Messages between sessions**). Without messaging, say plainly that the user is the only messenger.
-4. **Folding a task into another session X** (instead of giving it its own): write the task into X's topic file, not a topic file of its own. Add a `## Folded in` section there with the user's words and the date, what's known, and open questions with ★ and risk lines.
+4. **Folding a task into another session X** (instead of giving it its own). This is the user's choice: Claude may suggest it, with ★ and a risk line, next to giving the task its own row. Write the task into X's topic file, not a topic file of its own. Add a `## Folded in` section there with the user's words and the date, what's known, and open questions with ★ and risk lines.
+   - into the session running in this conversation: no row of its own and no message. Tell the user it's added to this session's scope. Risk: low.
    - into a `TODO` row: no row of its own. Add `+ <short title>` to X's Session cell, so the table still shows it. Safe, because X reads its topic file when it starts. Risk: low.
-   - into an `IN PROGRESS` row: also add a placeholder row `TODO (folded into X, pending)` whose topic file is X's, and message X (see **Messages between sessions**). Without messaging, do this only if the user confirms they'll pass it on to that conversation. Say in the risk line that X may already be past building; the placeholder keeps the task from being lost if so. Risk: medium.
-   - only X settles a pending row, when it commits: DONE if it did the task, or back to `TODO` with the section moved into a topic file of its own. Never mark it done from outside X.
+   - into an `IN PROGRESS` row: also add a placeholder row `TODO (folded into X, pending)` whose topic file is X's, and message X (see **Messages between sessions**). Without messaging, or if the claim names no session, do this only if the user confirms they'll pass it on to that conversation. Say in the risk line that X may already be past building; the placeholder keeps the task from being lost if so. Risk: medium.
+   - X settles a pending row when it commits: DONE if it did the task, or back to `TODO` with the section moved into a topic file of its own. The only other change allowed is the sender returning it to `TODO` when X replies "too late" (see **Messages between sessions**). Never mark it done from outside X.
 
 ### 3. `next-session`
 1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it. Skip `IN PROGRESS` rows and rows folded into another. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
