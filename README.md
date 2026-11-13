@@ -28,13 +28,13 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 
 - A short **queue file** (`prompts/prompt<Name>.md`) holds the goal, the project's checks, how to set up a parallel worktree, and a table of sessions.
 - One **topic file** per session holds its discussion, decisions, and notes.
-- Type **`next-session`** and Claude reads both, presents the scope, does the work, keeps the checks green, and proposes a commit message. Sessions can **start with a discussion** to settle choices first.
+- Type **`next-session`** and Claude reads both, presents the scope, waits for your go-ahead, does the work, keeps the checks green, and proposes a commit message. Sessions can **start with a discussion** to settle choices first.
 - **Your choice of branching**, made when the queue starts after Claude explains the trade-offs:
   - work on main;
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
 - When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. If a session's plan has independent parts, Claude offers to split them into their own sessions. Nothing starts without your yes.
-- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
+- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (scope, discussion, building, or waiting for approval), so another conversation knows it's taken. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
 - **Sessions can stop early.** If a session hits a blocker, you stop it, or it's too big to finish in one conversation, Claude pauses it. Its notes say what's done and what's left, and the partial work goes on a branch or stays in place, as you choose, so the next `next-session` picks up from there. Checks that were already failing before a session started are recorded as a baseline, not blamed on it. Merge conflicts are shown to you and resolved only with your go-ahead.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
@@ -58,7 +58,7 @@ Every token in a conversation's context is paid for again on every turn. A long 
 
 **Less work redone**
 - **Decisions are written down.** A session doesn't re-derive or re-argue what a topic file records as decided.
-- **Discussion first.** Sessions marked "starts with its discussion" settle the choices before building, so less work is built and then thrown away.
+- **Discussion first.** Every session shows its scope and waits for your go-ahead, and sessions marked "starts with its discussion" settle the choices first, so less work is built and then thrown away.
 - **Spike before queueing.** A risky claim is checked in a small test first, before a whole session is planned around it.
 - **Right-sized sessions.** Long plans are split so each session fits one conversation without being summarized midway.
 
