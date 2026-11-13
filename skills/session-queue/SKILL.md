@@ -82,6 +82,7 @@ Never notify for routine progress.
 2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, offer up to two parallel sessions (workflow 4), one line each with a risk line. The user decides based on workload and usage limits. Claim the row (`IN PROGRESS`, see Status).
 3. Create the session branch if the mode calls for one.
 4. If the session starts with its discussion, hold it, **wait for the user's decisions before building** (notify if on), and record them in the topic file.
+   - **Split before building.** Once the plan is set (here, or at step 2 if there's no discussion), check whether any parts touch different files and don't depend on each other's design. If so, offer to split them off, with a risk line that says how sure you are they're independent. Each part run in parallel costs a cold start, a second run of the Checks, and a merge, so offer it only for parts big enough to be worth that. With a yes, give each part its own placed `TODO` row (not ordered after this one) and a topic file holding the decisions it needs, so it doesn't start with a discussion. Keep one part in this session, and offer the new rows per workflow 4.
 5. Do the work, keeping the **Checks** clean.
 6. **End of session:**
    - re-read the topic file and the queue row for items added since the session started (such as a `## Folded in` section). Do them, or ask the user to carry them over, before the rest of this list;

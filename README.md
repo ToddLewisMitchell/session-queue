@@ -32,7 +32,7 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
   - work on main;
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
-- When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. It's only an offer: you decide based on your workload and usage limits.
+- When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. If a session's plan has independent parts, Claude offers to split them into their own sessions that can run in parallel. It's only an offer: you decide based on your workload and usage limits.
 - **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. A task folded into a running session stays open until that session does it, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
