@@ -22,7 +22,8 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 
 **Session table:** `| # | Session | Topic file | Status | Model |`
 - **#**: a short id (`1`, `2b`, `R3`). Never renumber; insert rows in order with a new id.
-- **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
+- **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, `IN PROGRESS <date> (<stage>)`, or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
+- **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (discussion)` or `(building)` when it starts, moves it from `(discussion)` to `(building)` once the user decides, and sets `(waiting for approval)` when it proposes the commit. Other conversations can't see this one, so the row is how they know it's taken and at what stage. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`), so ask rather than take a claimed row over.
 - **Model:** to switch, tell the user (`/model`) and **wait**.
 
 ## Principles
@@ -69,32 +70,39 @@ Never notify for routine progress.
 1. **Pick the queue** as in workflow 3, step 1. Write a topic file from `templates/topic.md`: the user's words with the date, the placement, what's known, and open questions with ★ and risk lines.
 2. Add a row with a targeted edit. Use `TODO (placement not decided)` unless the user gave a placement. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.
-3. **Parallel check.** If a session is running (in this conversation, or a worktree in `git worktree list`) and this task could run alongside it (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
+3. **Parallel check.** A session is running if it runs in this conversation, has a worktree in `git worktree list`, or has an `IN PROGRESS` row. Uncommitted changes in the main checkout that this conversation didn't make may mean a session is running in another conversation: ask the user, don't infer. If this task could run alongside a running session (workflow 4), offer a worktree with a risk line. Otherwise say why in one line. Never start one without a yes.
+   - If a session is running in another conversation, say plainly that this conversation can't reach it: the user is the only messenger.
+4. **Folding a task into another session** (instead of giving it its own):
+   - into a `TODO` row: add a `## Folded in` section to that row's topic file, and set the folded row to `TODO (folded into X)`. Safe, because X reads its topic file when it starts. Risk: low.
+   - into an `IN PROGRESS` row: only if the user confirms they'll pass it on to that conversation. Write the same section, and set the folded row to `TODO (folded into X, pending)`. Say in the risk line that X may already be past building. Risk: medium.
+   - never mark a folded task done from outside the session that does it. Session X marks it done (or returns it to `TODO`) when it commits.
 
 ### 3. `next-session`
-1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it.
-2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, offer up to two parallel sessions (workflow 4), one line each with a risk line. The user decides based on workload and usage limits.
+1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` row, and the project memory. If only unplaced rows are left, ask the user to place them. If the last DONE row is missing its hash, add it. Skip `IN PROGRESS` rows and rows folded into another. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
+2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, offer up to two parallel sessions (workflow 4), one line each with a risk line. The user decides based on workload and usage limits. Claim the row (`IN PROGRESS`, see Status).
 3. Create the session branch if the mode calls for one.
 4. If the session starts with its discussion, hold it, **wait for the user's decisions before building** (notify if on), and record them in the topic file.
 5. Do the work, keeping the **Checks** clean.
 6. **End of session:**
+   - re-read the topic file and the queue row for items added since the session started (such as a `## Folded in` section). Do them, or ask the user to carry them over, before the rest of this list;
    - the Checks pass (give the counts);
    - the queue's code review has run on the diff, with findings applied or explained;
    - session notes are in the topic file;
    - memory (or the session notes) has a DONE note and a handoff;
+   - the row says `IN PROGRESS <date> (waiting for approval)`;
    - a commit message is proposed (notify if on).
 
-   After approval: commit, and merge if on a branch. Mark the row DONE (see Status). Name the next session and its model; if the model differs, tell the user to switch (`/model`) before typing `next-session`.
+   After approval: commit, and merge if on a branch. Mark the row DONE (see Status), along with any rows folded into it that this session did. Name the next session and its model; if the model differs, tell the user to switch (`/model`) before typing `next-session`.
 
 ### 4. Parallel sessions in git worktrees
-**Eligible:** a placed `TODO` row that isn't ordered after the current session, and whose files don't overlap the current session's (judged from both topic files and `git status`). **Say how sure you are.** A row that starts with its discussion can't run as a background agent (it can't ask the user), so offer it only for a new conversation. Recommend at most two, because each one uses up limits faster and adds a merge.
+**Eligible:** a placed `TODO` row (not folded into another) that isn't ordered after the current session, and whose files don't overlap the current session's (judged from both topic files and `git status`). **Say how sure you are.** A row that starts with its discussion can't run as a background agent (it can't ask the user), so offer it only for a new conversation. Recommend at most two, because each one uses up limits faster and adds a merge.
 
 **Running one** (`parallel-session <id>`, or a yes to an offer):
 1. Make a worktree on branch `q/<id>-<slug>`:
    - **typed in a new conversation:** `EnterWorktree` (this conversation becomes the parallel session);
    - **from the conversation already running a session:** a background agent with `isolation: "worktree"`. Never `EnterWorktree` here, because it would move the current session. The agent leaves its work uncommitted in the worktree, since it can't ask for approval (see step 5).
 2. Apply the queue's **Worktree setup**.
-3. **Edit the queue, topic file and memory in the main checkout by full path, touching only this session's row.** This applies whether or not the queue folder is committed: an untracked one isn't in the worktree, and editing a committed one's copy in the worktree conflicts at merge.
+3. **Edit the queue, topic file, and memory in the main checkout by full path, touching only this session's row.** Claim it first (`IN PROGRESS`, see Status); for a background agent, the conversation that launched it does this. This applies whether or not the queue folder is committed: an untracked one isn't in the worktree, and editing a committed one's copy in the worktree conflicts at merge.
 4. Run the Checks in the worktree.
 5. **A background agent's work:** when it finishes, this session sends the notify if it's on, shows the diff and the Checks results, proposes a commit message, and after approval commits in the worktree.
 6. **Merge only with approval,** after the main session has committed, by the branch-per-session steps in every mode (`--no-ff`, rerun the Checks on the merged result, delete the branch). Then remove the worktree.
