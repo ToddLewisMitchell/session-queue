@@ -16,7 +16,7 @@
 - **Pick up exactly where you left off.** Type `next-session` in any new conversation and Claude knows what's next, what was decided, and why. No re-explaining, no "where were we?"
 - **Spend fewer tokens.** Each session starts fresh and reads only a short queue file and its own topic file. A long project doesn't turn into one ever-growing, ever-costlier conversation. See [How it keeps token use down](#how-it-keeps-token-use-down).
 - **Decide before Claude builds.** Big choices come up as options, each with a ★ recommendation and a risk line, and nothing gets built until you've chosen. Less rework, fewer surprises.
-- **You stay in charge.** Claude never commits, merges or publishes without your approval, and suggests a commit message at the end of each session.
+- **You stay in charge.** Claude never commits, merges, or publishes without your approval, and suggests a commit message at the end of each session.
 - **Quality doesn't slip.** Your tests, linters, and build checks must stay clean after every session, with a code review before each commit.
 - **Go faster when you have room.** Claude points out which sessions can safely run in parallel git worktrees. You say yes or no depending on your workload and usage limits.
 - **Nothing to run or host.** It's plain Markdown in your repo, readable and editable by you, and it works with Claude Code's own worktrees and memory.
@@ -33,7 +33,7 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
 - When a session starts, or when you add a task while one is running, Claude **offers to run independent sessions in parallel git worktrees**. If a session's plan has independent parts, Claude offers to split them into their own sessions that can run in parallel. It's only an offer: you decide based on your workload and usage limits.
-- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. A task folded into a running session stays open until that session does it, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
+- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (discussion, building, or waiting for approval), so another conversation knows it's taken. Where the host lets sessions message each other, the claim names the session, and a conversation that changes its topic file tells it right away. A task folded into another session goes into that session's topic file. If that session is already running, a placeholder row stays open until it does the task. Every session also re-reads its topic file before proposing the commit, so a late addition isn't lost.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
 ## Install
