@@ -10,7 +10,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 ## Files
 
 ```
-<queue-dir>/                      default: queues/
+queues/                           always this name, at the project root (the plugin looks only here)
   queue-<name>.md                 queue file: goal, project rules, session table
   <name>/<topic>.md               one topic file per session or to-do
 ```
@@ -19,6 +19,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 - **Topic files: everything else.** The user's words, quoted and dated. Decisions, open questions, plans, and `## Session notes` appended by each session.
 - **Git.** The queue file records whether its folder is committed (many users ignore `queues/` because notes are private). Never stage an ignored queue folder. In a committed one, stage only this session's own edits (`git add -p`), never another session's claim or notes.
 - **Templates:** `templates/queue.md`, `templates/topic.md`.
+- **The user may edit these files by hand.** Their edits are authoritative: never undo or "repair" one unasked. If the table or a Status can't be read as below, a topic file named in the table is missing, or a queue file isn't at `queues/queue-<name>.md` (renamed, or the folder moved), stop and ask rather than guess.
 
 **Session table:** `| # | Session | Topic file | Status | Model |`
 - **#**: a short id (`1`, `2b`, `R3`). Never renumber; insert rows in order with a new id.
@@ -88,10 +89,10 @@ When a conversation changes something a running session needs (a task folded in;
 2. **Claim the row** (`IN PROGRESS`, see Status), re-reading it first: if another conversation claimed it since step 1, go back to step 1. **Present the scope in one message:** the work, with your own choices stated plainly; the questions for the user, or "Nothing to decide" (Principle 1); the model; and the branch (if any). In the same message, handle parallel sessions as the **Pace** says (workflow 4), one line each with a risk line. Then **wait for the user's go-ahead before building** (notify if on). Their reply also answers any parallel offers.
 3. If the session starts with its discussion, the go-ahead waits for the user's decisions. Record them in the topic file.
    - **Split before building.** Once the plan is set (here, or at step 2 if there's no discussion), check whether any parts touch different files and don't depend on each other's design. If so, offer to split them off, with a risk line that says how sure you are they're independent. Offer it only for parts big enough to repay a cold start, another Checks run, and a merge (in speed, any independent part; in economy, don't offer it). With a yes, give each part its own placed `TODO` row (not ordered after this one) and a topic file holding the decisions it needs, so it doesn't start with a discussion. Keep one part in this session, and offer the new rows per workflow 4.
-4. After the go-ahead, set the stage to `building`, and create the session branch if the mode calls for one.
+4. After the go-ahead, re-read the topic file and the row, and raise any change made since step 2 with the user before building. Then set the stage to `building`, and create the session branch if the mode calls for one.
 5. Do the work, keeping the **Checks** clean. If they're quick, run them first for a baseline. A Check that fails without this session's changes (in the baseline run, or on the starting commit): say so, record it in the session notes, and leave it unless the user says to fix it. If a message says this session's topic file or row changed, re-read it, and tell the user about any new task before building it (see **Messages between sessions**).
 6. **End of session:**
-   - re-read the topic file and the queue row for items added since the session started (such as a `## Folded in` section). Do them, or ask the user to carry them over, before the rest of this list;
+   - re-read the topic file and the queue row for changes since the go-ahead (such as a `## Folded in` section or a hand edit). Do new items or ask the user to carry them over, and raise changed decisions with the user, before the rest of this list;
    - the Checks pass, or fail only as the recorded baseline did (give the counts);
    - the code review named in the Checks (e.g. `/code-review`) has run on the diff, with findings applied or explained. Reading the diff yourself doesn't count. If it can't run here, say so in the commit proposal and ask whether to commit without it;
    - session notes are in the topic file;
