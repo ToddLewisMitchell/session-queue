@@ -1,6 +1,6 @@
 {
   "name": "session-queue",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "A queue of fresh sessions for long projects: a short queue file and a topic file per session, `next-session`, discussion first, approval before every commit, memory handoffs, a pace setting for parallel worktrees (economy, balanced, or speed, shown under the prompt), and optional push notifications.",
   "author": {
     "name": "Todd Mitchell",
