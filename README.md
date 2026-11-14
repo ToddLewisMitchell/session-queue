@@ -71,7 +71,7 @@ Every token in a conversation's context is paid for again on every turn. A long 
 **Less spent per step**
 - **A model per session.** The Model column lets routine sessions run on a lighter model and saves the strongest one for the steps that need it.
 - **Targeted edits.** The queue file is changed with small edits, never rewritten in full.
-- **Parallel only as fast as you choose.** Parallel sessions don't use fewer tokens than running the same work one after another; each adds a cold start, a checks run, and a merge. Economy runs none, balanced suggests at most two, and speed runs them all. Worktrees keep parallel sessions from clashing, which avoids redoing work after a conflict.
+- **Parallel only as fast as you choose.** Parallel sessions don't use fewer tokens than running the same work one after another. Each one usually needs main merged in and the checks rerun, may conflict with another session, and needs its own worktree setup. A background agent also adds its report to the conversation that launched it. Economy runs none, balanced suggests at most two, and speed runs them all. Worktrees keep parallel sessions from clashing, which avoids redoing work after a conflict.
 
 The savings depend on the project and haven't been measured. The biggest are usually the fresh session per item and the short queue file.
 
