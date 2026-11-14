@@ -18,13 +18,13 @@ const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInt
 test('speed shows a flag', async ($, on) => {
   const shown = fakeQueues(on, { 'promptDemo.md': '# Demo\n\n**Pace.** speed (chosen 2026-11-13).\n' })
   await start($)
-  expect(shown.at(-1)).toBe('queue: ⚡ speed')
+  expect(shown.at(-1)).toBe('mode: ⚡ speed')
 })
 
 test('a missing Pace line is balanced', async ($, on) => {
   const shown = fakeQueues(on, { 'promptDemo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
-  expect(shown.at(-1)).toBe('queue: balanced')
+  expect(shown.at(-1)).toBe('mode: balanced')
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
@@ -34,7 +34,7 @@ test('a closed queue is ignored; its successor counts', async ($, on) => {
     'notes.md': '**Pace.** speed\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('queue: economy')
+  expect(shown.at(-1)).toBe('mode: economy')
 })
 
 test('two queues on different paces are named', async ($, on) => {
