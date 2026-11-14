@@ -85,5 +85,16 @@ Boards like Vibe Kanban or Backlog.md handle the worktrees and the board, and do
 
 Use it with Claude Code's own worktree support.
 
+## Testing
+`test/test_skill.py` is an end-to-end test of the skill. Each scenario builds a throwaway git repo, runs `claude -p` in it with this plugin loaded, and checks the queue, files, and git state it leaves behind. A small model grades the wording of replies.
+
+```
+python3 test/test_skill.py --list           # scenario names and descriptions
+python3 test/test_skill.py --changed --dry  # scenarios your edits affect, with a cost estimate
+python3 test/test_skill.py resume skip      # run scenarios by name
+```
+
+It needs the `claude` CLI on your PATH, and it runs on your own login: the full suite costs about $5. Sandboxes and transcripts go in `test/runs/`, which git ignores.
+
 ## License
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free to share and adapt with credit, for non-commercial purposes only, under the same license. It may not be sold. See `LICENSE`.

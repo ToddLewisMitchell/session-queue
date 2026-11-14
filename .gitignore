@@ -1,0 +1,3 @@
+# End-to-end test sandboxes, transcripts, and cost records
+test/runs/
+__pycache__/
