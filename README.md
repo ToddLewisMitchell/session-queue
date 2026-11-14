@@ -2,6 +2,16 @@
 
 **Save tokens and stay organized while working on a project with Claude Code!**
 
+## Install
+```
+/plugin marketplace add ToddLewisMitchell/session-queue
+/plugin install session-queue@session-queue
+```
+
+To try a local copy instead, point Claude Code at the folder: `/plugin marketplace add /path/to/session-queue`.
+
+The pace flag under the prompt comes from a small hooks module in `hooks/`, written against Claude Code 2.1.322. On a version without hooks modules, the flag doesn't show; the rest of the plugin is unaffected.
+
 ## Use
 
 | You type | Claude does |
@@ -41,16 +51,6 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 - **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (scope, discussion, building, or waiting for approval), so another conversation knows it's taken. Typing `next-session` in a second conversation picks the next free row and, if it can't clash with the running one, runs it in its own worktree. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
 - **Sessions can stop early.** If a session hits a blocker, you stop it, or it's too big to finish in one conversation, Claude pauses it. Its notes say what's done and what's left, and the partial work goes on a branch or stays in place, as you choose, so the next `next-session` picks up from there. Checks that were already failing before a session started are recorded as a baseline, not blamed on it. Merge conflicts are shown to you and resolved only with your go-ahead.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
-
-## Install
-```
-/plugin marketplace add ToddLewisMitchell/session-queue
-/plugin install session-queue@session-queue
-```
-
-To try a local copy instead, point Claude Code at the folder: `/plugin marketplace add /path/to/session-queue`.
-
-The pace flag under the prompt comes from a small hooks module in `hooks/`, written against Claude Code 2.1.322. On a version without hooks modules, the flag doesn't show; the rest of the plugin is unaffected.
 
 ## How it keeps token use down
 Every token in a conversation's context is paid for again on every turn. A long project run as one long conversation gets more expensive with each step, and gets summarized and loses detail. This method keeps each session's context small and focused.
