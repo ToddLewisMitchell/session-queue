@@ -34,7 +34,7 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
   - work on main;
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
-- **A pace for parallel work**, chosen when the queue starts and changeable any time. It's shown under the prompt (`mode: economy`, `mode: balanced`, or `mode: ⚡ speed`):
+- **A pace for parallel work**, chosen when the queue starts and changeable any time. It's shown under the prompt (`pace: economy`, `pace: balanced`, or `pace: ⚡ speed`):
   - **economy:** one session at a time, and a parallel session only when you type `parallel-session <id>`. Slowest overall, cheapest;
   - **balanced** (the default): when a session starts, or you add a task while one is running, Claude offers up to two independent sessions to run in parallel git worktrees, and splits of big independent parts. Nothing starts without your yes;
   - **speed:** every independent session starts in its own worktree at once, with no cap. Fastest, but it uses up limits soonest and leaves more merges to approve. Commits and merges still wait for you.

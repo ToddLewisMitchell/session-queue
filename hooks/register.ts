@@ -44,7 +44,7 @@ async function refresh($: EngineInterface) {
   const paces = new Set(queues.map(q => q.pace))
   $.ui.status(
     paces.size === 1
-      ? `mode: ${label([...paces][0] as Pace)}`
+      ? `pace: ${label([...paces][0] as Pace)}`
       : queues.map(q => `${q.name}: ${label(q.pace)}`).join(' · '),
   )
 }
