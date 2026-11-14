@@ -10,7 +10,7 @@ Send **one** notification each time a session stops and needs the user:
 - a blocker, or the session pauses (workflow 3, Stopping early).
 
 Never notify for routine progress.
-- **Format:** one line, under 200 characters, leading with the session id and the action, e.g. `Queue 2b: commit ready for approval (checks green)`.
+- **Format:** one line, under 200 characters, leading with the session id, its short name (`SKILL.md` Principle 8), and the action, e.g. `Queue 2b (sync fix): commit ready for approval (checks green)`.
 - **No private content:** no code or topic-file quotes, since the message can show on a lock screen.
 - **"Not sent" is normal** (the user is at the terminal, or notifications are off). Don't retry.
 - **Never approval:** a notification doesn't count as an answer. Still wait for one.

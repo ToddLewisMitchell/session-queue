@@ -34,6 +34,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 5. **Don't re-derive or re-litigate** what a topic file records as decided.
 6. **Targeted edits only** to the queue file, never a full rewrite. Another session may be editing it.
 7. **Document as you go:** remarks in code, decisions and notes in the topic file, and a one-line handoff in memory that replaces the last one (or, if the host has none, in the topic file's session notes). A parallel session writes its handoff in its session notes instead, so it can't overwrite another's.
+8. **Name sessions, not just ids.** The user doesn't have the table open. Everywhere outside the queue file (replies, questions, commit proposals, notifications, and messages), follow each session id with a short name of two to four words from its Session cell, every time it appears, not just the first: "R22 (CSV export) waits for R19 (date parser)", never "R22 waits for R19".
 
 ## Branching
 The user picks one of three modes when the queue starts. Always use the full mode names. Read `references/branching.md` only to explain the options, at queue start or when the user asks to change modes. Missing means **work on main**.
