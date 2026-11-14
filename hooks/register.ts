@@ -7,9 +7,10 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const QUEUE = /^prompt(.+)\.md$/
 const PACE = /^\*\*Pace\.\*\*\s*(economy|balanced|speed)\b/m
-// A closed queue says "closed ... a record only"; a successor quotes its
-// predecessor the same way on its "Successor to" line, so that line is skipped.
-const CLOSED = /\bclosed\b[^\n]*\brecord only\b/i
+// A closed queue has a line starting "Closed <date>, a record only." under its
+// title. Anchoring to the line start skips a successor's "Successor to ...
+// (closed ..., a record only)" and any row or note that mentions both words.
+const CLOSED = /^Closed\b[^\n]*\brecord only\b/im
 
 type Pace = 'economy' | 'balanced' | 'speed'
 
@@ -32,7 +33,7 @@ async function openQueues($: EngineInterface) {
     } catch {
       continue
     }
-    if (CLOSED.test(text.replace(/^.*Successor to.*$/gm, ''))) continue
+    if (CLOSED.test(text)) continue
     queues.push({ name: m[1] ?? '', pace: (PACE.exec(text)?.[1] as Pace) ?? 'balanced' })
   }
   return queues

@@ -37,6 +37,14 @@ test('a closed queue is ignored; its successor counts', async ($, on) => {
   expect(shown.at(-1)).toBe('pace: economy')
 })
 
+test('a row that mentions closing a record stays open', async ($, on) => {
+  const shown = fakeQueues(on, {
+    'promptDemo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
+  })
+  await start($)
+  expect(shown.at(-1)).toBe('pace: ⚡ speed')
+})
+
 test('two queues on different paces are named', async ($, on) => {
   const shown = fakeQueues(on, {
     'promptA.md': '**Pace.** speed\n',
