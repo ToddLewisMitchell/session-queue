@@ -24,7 +24,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 - **#**: a short id (`1`, `2b`, `R3`). Never renumber; insert rows in order with a new id.
 - **Status:** `TODO`, `TODO (placement not decided)` (the user must place it before it runs), `TODO (after X)` / `TODO (last)`, `TODO (folded into X, pending)` (workflow 2, step 4), `IN PROGRESS <date> (<stage>; <session>)`, `PAUSED <date> (<why>; <where the partial work is>)` (workflow 3, Stopping early), `DROPPED <date> (<why>)` (workflow 2), or `**DONE <date>** (committed <hash>; outcome)`. In a committed queue folder, the hash isn't known until after the commit: write `DONE <date> (outcome)` in the session's commit, and the next session adds the hash.
 - **IN PROGRESS is a claim.** A session sets its row to `IN PROGRESS <date> (<stage>; <session>)` when it starts. Stages: `scope` while it waits for the go-ahead (`discussion` if it starts with one), then `building` once the user says go, then `waiting for approval` once the commit is proposed. `<session>` is the name other conversations message it by (see **Messages between sessions**); it stays through every stage, and is left out if the host has no messaging. The row is how other conversations know it's taken, at what stage, and whom to tell. Treat any `IN PROGRESS` row as running. A crashed or abandoned session leaves a stale claim: only the user clears it (back to `TODO`, or `PAUSED` if it left partial work), so ask rather than take a claimed row over. If its named session isn't in `ListAgents`, say so when asking.
-- **Model:** to switch, tell the user (`/model`) and **wait**.
+- **Model:** to switch, tell the user (`/model`) and **wait**. Never switch yourself, including by starting an agent on another model.
 
 ## Principles
 1. **A risk line on every option and recommendation.** Mark the recommended one ★.
@@ -33,7 +33,7 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 4. **Spike before queueing** a feasibility claim you can't verify. Split long plans into several sessions.
 5. **Don't re-derive or re-litigate** what a topic file records as decided.
 6. **Targeted edits only** to the queue file, never a full rewrite. Another session may be editing it.
-7. **Document as you go:** remarks in code, decisions and notes in the topic file, and a handoff in memory (or, if the host has none, in the topic file's session notes).
+7. **Document as you go:** remarks in code, decisions and notes in the topic file, and a one-line handoff in memory that replaces the last one (or, if the host has none, in the topic file's session notes).
 
 ## Branching
 The user picks one of three modes when the queue starts. Always use the full mode names. Read `references/branching.md` only to explain the options, at queue start or when the user asks to change modes. Missing means **work on main**.
@@ -67,7 +67,7 @@ Never notify for routine progress.
 The queue's **Pace** line is `economy`, `balanced`, or `speed`; missing means **balanced**. It sets how much runs in parallel (workflow 4). Keep the line's form, `**Pace.** <setting> (chosen <date>; ...)`: the plugin shows it under the prompt. Parallel sessions don't use fewer tokens than running the same rows one after another. They finish sooner, but use up limits faster, and each adds a cold start, its own Checks run, and a merge.
 - **economy:** one session at a time. Don't offer parallel sessions or splits. Run one only when the user types `parallel-session <id>`. Slowest overall, cheapest.
 - **balanced:** offer up to two parallel sessions, each with a risk line, wherever an offer comes up (the scope message, the end of a session, or a newly added task). Each starts only after a yes.
-- **speed:** the setting is the user's standing yes. Wherever an offer would come up, start every eligible row instead, with no cap, each as a background agent, and say in one line which ones started and which were held back, and why. List eligible rows that start with their discussion for the user to open in new conversations. Offer splits for any independent part, not only big ones. Commits and merges still wait for approval. A usage limit can stop every running session at once; when the user is back, check the `IN PROGRESS` rows.
+- **speed:** the setting is the user's standing yes. Wherever an offer would come up, start every eligible row instead, with no cap, each as a background agent, and say in one line which ones started and which were held back, and why. List eligible rows that start with their discussion or need another model for the user to open in new conversations. Offer splits for any independent part, not only big ones. Commits and merges still wait for approval. A usage limit can stop every running session at once; when the user is back, check the `IN PROGRESS` rows.
 
 The user can change the Pace any time: a targeted edit of the line, with the date. It applies to offers from then on and doesn't stop running sessions.
 
@@ -118,7 +118,7 @@ Rules:
    - the Checks pass, or fail only as the recorded baseline did (give the counts);
    - the code review named in the Checks (e.g. `/code-review`) has run on the diff, with findings applied or explained. Reading the diff yourself doesn't count. If it can't run here, say so in the commit proposal and ask whether to commit without it;
    - session notes are in the topic file;
-   - memory (or the session notes) has a DONE note and a handoff;
+   - memory (or the session notes) has the one-line handoff, saying DONE;
    - the row says `IN PROGRESS <date> (waiting for approval; <session>)`;
    - a commit message is proposed (notify if on).
 
@@ -126,11 +126,11 @@ Rules:
 
 **Stopping early.** On a blocker, when the user stops it, or when it can't finish before the conversation is summarized, pause instead of pushing on (notify if on):
 - **Partial work:** ask where it goes. ★ A work-in-progress commit on the session's branch (`q/<id>-<slug>`, created now if the mode had none, then switch back to main), so main stays clean. Risk: low. Or leave it uncommitted in place. Risk: medium, because the next session in this checkout starts on top of it. A parallel session's work stays in its worktree.
-- **Session notes:** what's done, what's left, why it stopped, and where the partial work is. Memory gets a one-line handoff.
+- **Session notes:** what's done, what's left, why it stopped, and where the partial work is. Memory gets the one-line handoff.
 - **Row:** `PAUSED <date> (<why>; <where the partial work is>)`. Pending rows folded into it stay pending; it settles them when it commits after resuming.
 
 ### 4. Parallel sessions in git worktrees
-**Eligible:** a placed `TODO` row (not folded into another) that isn't ordered after the current session, and whose files don't overlap the current session's (judged from both topic files and `git status`). **Say how sure you are.** A row that starts with its discussion can't run as a background agent (it can't ask the user), so offer it only for a new conversation. For other rows, the user's yes to the offer (or, in speed, the Pace) is the agent's go-ahead; in a new conversation, present the scope and wait as in workflow 3, step 2. How many to offer or start is set by the **Pace**.
+**Eligible:** a placed `TODO` row (not folded into another) that isn't ordered after the current session, and whose files don't overlap the current session's (judged from both topic files and `git status`). **Say how sure you are.** A row that starts with its discussion can't run as a background agent (it can't ask the user), so offer it only for a new conversation. The same goes for a row whose Model differs from this conversation's: a background agent runs on this conversation's model, so never give it another, and in the new conversation the user switches with `/model`. For other rows, the user's yes to the offer (or, in speed, the Pace) is the agent's go-ahead; in a new conversation, present the scope and wait as in workflow 3, step 2. How many to offer or start is set by the **Pace**.
 
 **Running one** (`parallel-session <id>`, a yes to an offer, or the speed Pace):
 1. Make a worktree on branch `q/<id>-<slug>`:
