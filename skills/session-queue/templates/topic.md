@@ -7,8 +7,9 @@
 ## What's known
 - <Facts, files, constraints, related topic files>
 
-## Questions for the discussion (recommendations ★)
-- **<Question>.** ★ <Recommended option>. Alternative: <other option>. Risk: <low / medium / high, and why>.
+## Open questions (recommendations ★)
+<Only questions whose answer changes what gets built and that the code or a sensible default can't settle (SKILL.md Principle 1). Otherwise "None.">
+- **<Question>.** ★ <Recommended option>. Alternative: <another a reasonable user might pick>. Risk: <low / medium / high, and why>.
 
 ## Decisions
 - <date>: <decision> (user)
