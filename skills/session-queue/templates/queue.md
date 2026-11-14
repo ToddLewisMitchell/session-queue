@@ -10,6 +10,8 @@
 
 **Branching.** <work on main | branch per session | branch for risky sessions> (chosen <date>; see the skill's Branching section).
 
+**Pace.** <economy | balanced | speed> (chosen <date>; see the skill's Pace section).
+
 **Notify.** <off | on: push a notification when a session stops for my decision or approval> (chosen <date>; see the skill's Notifications section).
 
 ## Checks

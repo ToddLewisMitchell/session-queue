@@ -14,6 +14,10 @@ Where the host has a multiple-choice tool (e.g. `AskUserQuestion`), use it for e
 3. **Then, in one call:**
    - whether the queue folder is committed;
    - the **branching mode**, using the comparison in `branching.md` (next to this file). Text written before the dialog may be hidden while it's open, so put each mode's column (how it works, pros, cons, risk) in that option's preview. Without the tool, show the table in the message;
+   - the **Pace**: how much runs in parallel (see **Pace** in `SKILL.md`). Options:
+     - **economy:** one session at a time, slowest overall but cheapest. Risk: low.
+     - ★ **balanced:** up to two parallel offers, each needing a yes. Risk: low.
+     - **speed:** every eligible row starts at once, fastest but uses up limits soonest, with more merges to approve. Risk: medium.
    - **Notify**, only if the host can push notifications (default off). Tell the user its limit: a session that dies from a usage limit, crash, or closed terminal can't send anything, so silence doesn't mean it's still working.
 4. **Checks and Worktree setup:** ask only what the answers and the repo leave unknown (`worktree-setup.md`, next to this file).
 5. Write `prompt<Name>.md` from `../templates/queue.md`.
