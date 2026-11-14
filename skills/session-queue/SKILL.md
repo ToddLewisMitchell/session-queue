@@ -10,14 +10,14 @@ Long projects are split into **sessions**, each sized to fit one conversation. A
 ## Files
 
 ```
-<queue-dir>/                      default: prompts/
-  prompt<Name>.md                 queue file: goal, project rules, session table
+<queue-dir>/                      default: queues/
+  queue-<name>.md                 queue file: goal, project rules, session table
   <name>/<topic>.md               one topic file per session or to-do
 ```
 
 - **Queue file: short** (≤ about 500 lines), because every session reads it all. Only what `templates/queue.md` holds.
 - **Topic files: everything else.** The user's words, quoted and dated. Decisions, open questions, plans, and `## Session notes` appended by each session.
-- **Git.** The queue file records whether its folder is committed (many users ignore `prompts/` because notes are private). Never stage an ignored queue folder. In a committed one, stage only this session's own edits (`git add -p`), never another session's claim or notes.
+- **Git.** The queue file records whether its folder is committed (many users ignore `queues/` because notes are private). Never stage an ignored queue folder. In a committed one, stage only this session's own edits (`git add -p`), never another session's claim or notes.
 - **Templates:** `templates/queue.md`, `templates/topic.md`.
 
 **Session table:** `| # | Session | Topic file | Status | Model |`
@@ -81,7 +81,7 @@ When a conversation changes something a running session needs (a task folded in;
    - into an `IN PROGRESS` row in another conversation: a placeholder row and a message (`references/messaging.md`). Risk: medium, because X may already be past building.
 
 ### 3. `next-session`
-1. **Pick the queue.** With more than one open queue, use the one named in `next-session <Name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` or `PAUSED` row, and the project memory. If only unplaced rows are left, ask the user to place them. Skip `IN PROGRESS` and `DROPPED` rows, and rows folded into another. A `PAUSED` row resumes from its session notes and partial work, in its worktree or on its branch, and finishes by the branch-per-session steps in every mode. If it paused on a blocker, ask whether it's cleared. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
+1. **Pick the queue.** With more than one open queue, use the one named in `next-session <name>`, or ask. Read the queue file, the topic file of the first runnable `TODO` or `PAUSED` row, and the project memory. If only unplaced rows are left, ask the user to place them. Skip `IN PROGRESS` and `DROPPED` rows, and rows folded into another. A `PAUSED` row resumes from its session notes and partial work, in its worktree or on its branch, and finishes by the branch-per-session steps in every mode. If it paused on a blocker, ask whether it's cleared. If the main checkout has uncommitted changes, ask whether another conversation is running a session before starting here.
    - **Missing hash:** if the last DONE row has no commit hash, find its commit with `git log` and add `committed <hash>;` to it. Do this first, even if the session then stops to ask something.
 2. **Present the scope in one message:** the work, open questions, model, and branch (if any). In the same message, handle parallel sessions as the **Pace** says (workflow 4), one line each with a risk line. Claim the row (`IN PROGRESS`, see Status), then **wait for the user's go-ahead before building** (notify if on). Their reply also answers any parallel offers.
 3. If the session starts with its discussion, the go-ahead waits for the user's decisions. Record them in the topic file.

@@ -5,7 +5,7 @@ import type { EngineInterface, Register } from 'claude-code'
 // queue files when the session starts and after every turn, so a Pace change
 // shows up as soon as the turn that made it ends.
 
-const QUEUE = /^prompt(.+)\.md$/
+const QUEUE = /^queue-(.+)\.md$/
 const PACE = /^\*\*Pace\.\*\*\s*(economy|balanced|speed)\b/m
 // A closed queue has a line starting "Closed <date>, a record only." under its
 // title. Anchoring to the line start skips a successor's "Successor to ...
@@ -19,7 +19,7 @@ const label = (pace: Pace) => (pace === 'speed' ? `⚡ ${pace}` : pace)
 async function openQueues($: EngineInterface) {
   let entries
   try {
-    entries = await $.fs.list('prompts')
+    entries = await $.fs.list('queues')
   } catch {
     return []
   }
@@ -29,7 +29,7 @@ async function openQueues($: EngineInterface) {
     if (!m) continue
     let text: string
     try {
-      text = await $.fs.read(`prompts/${entry.name}`)
+      text = await $.fs.read(`queues/${entry.name}`)
     } catch {
       continue
     }

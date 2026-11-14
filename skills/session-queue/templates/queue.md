@@ -1,6 +1,6 @@
 # <Project> <name> queue
 
-<Successor to `prompt<Previous>.md` (closed <date>, a record only).> `next-session` runs from this file.
+<Successor to `queue-<previous>.md` (closed <date>, a record only).> `next-session` runs from this file.
 
 **Goal.** <One sentence.>
 

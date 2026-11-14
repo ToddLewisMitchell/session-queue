@@ -3,7 +3,7 @@
 Read this before sending or answering a message to another session, folding a task into an `IN PROGRESS` row in another conversation, or settling a `TODO (folded into X, pending)` row. Section and workflow numbers refer to `SKILL.md`.
 
 ## Sending and receiving
-- **The change goes in the files first.** The message only says what changed and where. Lead with the queue and session id, e.g. `Queue 2b: a task was folded in; re-read "## Folded in" in prompts/app/sync.md`. Write paths as plain text; `@` attaches nothing in a message.
+- **The change goes in the files first.** The message only says what changed and where. Lead with the queue and session id, e.g. `Queue 2b: a task was folded in; re-read "## Folded in" in queues/app/sync.md`. Write paths as plain text; `@` attaches nothing in a message.
 - **Inform, never instruct.** Don't ask the other session to run, commit, approve, or delete anything; its user decides that.
 - **Receiving:** if this session holds no such row (a reused name or a stale claim), reply saying so and ignore the message. Otherwise re-read the named section before going on. A new task or a change to a decision goes to the user in one line; if it has open questions, or changes what's already decided, wait for their answers before building it. If it's too late to act on (for example, the session is already past building), reply and say so (reply to the message's `from`), and raise it again at the end of the session.
 - **Replies:** the sender passes any reply to its user in one line. On "too late", it also turns a pending placeholder row into the task's own `TODO` row, with the `## Folded in` section moved into a topic file of its own.

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-// Each hook here stands for the engine: a fake prompts/ folder, and a record
+// Each hook here stands for the engine: a fake queues/ folder, and a record
 // of every status line the plugin pins.
 function fakeQueues(on: any, files: Record<string, string>) {
   const shown: (string | undefined)[] = []
@@ -16,21 +16,21 @@ function fakeQueues(on: any, files: Record<string, string>) {
 const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
 test('speed shows a flag', async ($, on) => {
-  const shown = fakeQueues(on, { 'promptDemo.md': '# Demo\n\n**Pace.** speed (chosen 2026-11-13).\n' })
+  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Pace.** speed (chosen 2026-11-13).\n' })
   await start($)
   expect(shown.at(-1)).toBe('pace: ⚡ speed')
 })
 
 test('a missing Pace line is balanced', async ($, on) => {
-  const shown = fakeQueues(on, { 'promptDemo.md': '# Demo\n\n**Notify.** off\n' })
+  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
   expect(shown.at(-1)).toBe('pace: balanced')
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
   const shown = fakeQueues(on, {
-    'promptDemo.md': '# Demo\n\nClosed 2026-11-10, a record only.\n\n**Pace.** speed\n',
-    'promptCalc2.md': '# Calc2\n\nSuccessor to `promptDemo.md` (closed 2026-11-10, a record only).\n\n**Pace.** economy\n',
+    'queue-demo.md': '# Demo\n\nClosed 2026-11-10, a record only.\n\n**Pace.** speed\n',
+    'queue-calc2.md': '# Calc2\n\nSuccessor to `queue-demo.md` (closed 2026-11-10, a record only).\n\n**Pace.** economy\n',
     'notes.md': '**Pace.** speed\n',
   })
   await start($)
@@ -39,7 +39,7 @@ test('a closed queue is ignored; its successor counts', async ($, on) => {
 
 test('a row that mentions closing a record stays open', async ($, on) => {
   const shown = fakeQueues(on, {
-    'promptDemo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
+    'queue-demo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
   })
   await start($)
   expect(shown.at(-1)).toBe('pace: ⚡ speed')
@@ -47,11 +47,11 @@ test('a row that mentions closing a record stays open', async ($, on) => {
 
 test('two queues on different paces are named', async ($, on) => {
   const shown = fakeQueues(on, {
-    'promptA.md': '**Pace.** speed\n',
-    'promptB.md': '**Pace.** balanced\n',
+    'queue-a.md': '**Pace.** speed\n',
+    'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('A: ⚡ speed · B: balanced')
+  expect(shown.at(-1)).toBe('a: ⚡ speed · b: balanced')
 })
 
 test('no queue folder clears the line', async ($, on) => {

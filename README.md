@@ -8,7 +8,7 @@
 |---|---|
 | "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, pace, and notifications in one go, then writes the queue file |
 | "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
-| `next-session` | Runs the next placed TODO session (`next-session <Name>` if you keep two queues) |
+| `next-session` | Runs the next placed TODO session (`next-session <name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Set the queue's pace to speed" | Switches between economy, balanced, and speed (see below) |
 | "Where's the queue?" | Shows each open row, what runs next, and any paused or stale sessions, without changing anything |
@@ -27,7 +27,7 @@
 ## How it works
 A Claude Code plugin for running a long project as a **queue of sessions**, kept in plain Markdown.
 
-- A short **queue file** (`prompts/prompt<Name>.md`) holds the goal, the project's checks, how to set up a parallel worktree, and a table of sessions.
+- A short **queue file** (`queues/queue-<name>.md`) holds the goal, the project's checks, how to set up a parallel worktree, and a table of sessions.
 - One **topic file** per session holds its discussion, decisions, and notes.
 - Type **`next-session`** and Claude reads both, presents the scope, waits for your go-ahead, does the work, keeps the checks green, and proposes a commit message. Sessions can **start with a discussion** to settle choices first.
 - **Your choice of branching**, made when the queue starts after Claude explains the trade-offs:
