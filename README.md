@@ -28,7 +28,7 @@ The pace flag under the prompt comes from a small hooks module in `hooks/`, writ
 ## Why use it
 - **Pick up exactly where you left off.** Type `next-session` in any new conversation and Claude knows what's next, what was decided, and why. No re-explaining, no "where were we?"
 - **Spend fewer tokens.** Each session starts fresh and reads only a short queue file and its own topic file. A long project doesn't turn into one ever-growing, ever-costlier conversation. See [How it keeps token use down](#how-it-keeps-token-use-down).
-- **Decide before Claude builds.** Real choices come up as options, each with a ★ recommendation and a risk line, and nothing gets built until you've chosen. Choices Claude can settle itself are stated plainly, not dressed up as questions. Less rework, fewer surprises.
+- **Decide before Claude builds.** Real choices come up as options, each with a ★ recommendation and a risk line (for example, "Risk: medium, because the next session starts on top of uncommitted work"), and nothing gets built until you've chosen. Choices Claude can settle itself are stated plainly, not dressed up as questions. Less rework, fewer surprises.
 - **You stay in charge.** Claude never commits, merges, or publishes without your approval, and suggests a commit message at the end of each session.
 - **Quality doesn't slip.** Your tests, linters, and build checks must stay clean after every session, with a code review before each commit.
 - **Pick your pace.** Economy runs one session at a time. Balanced offers up to two safe parallel sessions for your yes. Speed runs every safe session in parallel at once, and a ⚡ under the prompt reminds you it's on.
@@ -78,7 +78,7 @@ The savings depend on the project and haven't been measured. The biggest are usu
 ## Why not a kanban tool?
 Boards like Vibe Kanban or Backlog.md handle the worktrees and the board, and do it well. This plugin is about the **method**:
 - discussion first;
-- risk lines;
+- a low, medium, or high risk rating, with the reason, on every option;
 - your approval before every commit and merge;
 - a model for each session;
 - handoffs that survive cleared context.
