@@ -32,7 +32,7 @@ For a parallel session in a git worktree:
 | # | Session | Topic file | Status | Model |
 |---|---|---|---|---|
 | 1 | <What it does>. **Starts with its discussion** | `<name>/<topic>.md` | TODO | <model> |
-| 2 | <What it does> | `<name>/<topic>.md` | TODO (placement not decided) | <model> |
+| 2 | <What it does> | `<name>/<topic>.md` | TODO | <model> |
 | 3 | <What it does>. **Branch** (risky: <why>) | `<name>/<topic>.md` | TODO (after 1) | <model> |
 
-<Ordering notes, e.g. "The order of 2–4 is for the user to set. 5 comes last.">
+<Ordering notes, e.g. "2 and 4 don't depend on each other. 5 comes last.">

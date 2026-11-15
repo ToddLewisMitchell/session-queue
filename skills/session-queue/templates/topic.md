@@ -2,7 +2,7 @@
 
 **The user:** "<their words, quoted>"
 
-**Placement.** <Where it goes in the queue, or "not decided". Why.> <**Starts with its discussion.**>
+**Placement.** <Where it goes in the queue (the user's, or Claude's choice), or "held until the user places it". Why.> <**Starts with its discussion.**>
 
 ## What's known
 - <Facts, files, constraints, related topic files>

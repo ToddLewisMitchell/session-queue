@@ -457,21 +457,34 @@ def _(c, ctx):
           "session 3 (Rust) as needing a placement before it can run?", "names next row and unplaced row")
 
 
-@scenario("add", "Add a task: topic file + one unplaced row", "simple",
+@scenario("add", "Add a task: placed row or a fold, reported without a placement question", "simple",
           ["Add to the queue: a divide(a, b) function that raises ValueError on zero."])
 def _(c, ctx):
     root = ctx.root
-    new = [k for k in table(root) if k not in ("1", "2", "3")]
-    if c.check(len(new) == 1, f"exactly one new row (got {new})"):
-        session, tfile, st, _ = table(root)[new[0]]
+    rows = table(root)
+    new = [k for k in rows if k not in ("1", "2", "3")]
+    folded = [k for k in ("1", "2") if "+" in rows[k][0] and "divide" in rows[k][0].lower()]
+    if folded and not new:
+        # Folding a small calc.py task into a TODO row in the same file is allowed (workflow 2, step 4).
+        t = read(root, "queues/" + rows[folded[0]][1].strip("`"))
+        fold = t.split("## Folded in", 1)[-1] if "## Folded in" in t else ""
+        c.check("divide" in fold and TODAY in fold, f"row {folded[0]}'s topic file has a dated ## Folded in section")
+    elif c.check(len(new) == 1, f"exactly one new row, or a fold (got new {new}, folded {folded})"):
+        session, tfile, st, _ = rows[new[0]]
         c.check("divide" in session.lower(), "new row is the divide task")
-        c.check("placement not decided" in st, f"new row is unplaced (status: {st})")
+        c.check(st.startswith("TODO") and "placement not decided" not in st and "pending" not in st,
+                f"new row is placed (status: {st})")
         t = read(root, "queues/" + tfile.strip("`"))
         c.check(t, f"topic file {tfile} exists")
         c.check("divide" in t.lower() and TODAY in t, "topic file quotes the user, dated today")
-        c.check("★" in t and re.search(r"risk", t, re.I), "topic file has ★ options with risk lines")
-    c.check(all(l in row_lines(root) for l in ctx.start["rows"]), "existing rows untouched")
+        pl = re.search(r"\*\*Placement\.\*\*(.*)", t)
+        c.check(pl and "not decided" not in pl.group(1).lower() and len(pl.group(1).strip()) > 10,
+                f"topic file records the placement and why ({pl.group(1).strip()[:80] if pl else '-'})")
+        c.check(all(l in row_lines(root) for l in ctx.start["rows"]), "existing rows untouched")
     c.check(not py_has(root, "calc.py", "divide"), "nothing built (only queued)")
+    judge(c, ctx.out, "Does the reply say where the task was placed (or which session it was folded into) "
+          "and why, WITHOUT asking the user to choose or confirm its place in the queue?",
+          "places it and reports, no placement question")
 
 
 @scenario("drop", "Drop a task: DROPPED row, topic file kept", "simple",

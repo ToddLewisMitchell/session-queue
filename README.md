@@ -17,7 +17,7 @@ The pace flag under the prompt comes from a small hooks module in `hooks/`, writ
 | You type | Claude does |
 |---|---|
 | "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, pace, and notifications in one go, then writes the queue file |
-| "Add to the queue: <task>" | Writes a topic file and a row; offers to run it in parallel if that's safe |
+| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why; writes a topic file and a row; offers to run it in parallel if that's safe |
 | `next-session` | Runs the next placed TODO session (`next-session <name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Set the queue's pace to speed" | Switches between economy, balanced, and speed (see below) |
