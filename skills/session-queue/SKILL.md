@@ -28,7 +28,7 @@ queues/                           always this name, at the project root (the plu
 - **Model:** to switch, tell the user (`/model`) and **wait**. Never switch yourself, including by starting an agent on another model.
 
 ## Principles
-1. **Ask only real questions:** ones whose answer changes what gets built and that the topic file, the code, or a sensible default can't settle. Give options only when a reasonable user might pick each of at least two (no strawman to make a pair), each with a risk line, the recommended one ★. State your own choices plainly ("I'll compute it in the existing route"), not as options, with a risk line only when the risk isn't low.
+1. **Ask only real questions:** ones whose answer changes what gets built and that the topic file, the code, or a sensible default can't settle. Give options only when a reasonable user might pick each of at least two (no strawman to make a pair), each with a risk line, the recommended one ★. Spell out each option as a reply the user can give (not "that"), never as a command such as `next-session` or `parallel-session <id>`: a command starts a workflow and doesn't answer the question. State your own choices plainly ("I'll compute it in the existing route"), not as options, with a risk line only when the risk isn't low.
 2. **Never commit, push, merge, or publish without the user's approval.** Propose a commit message instead.
 3. **Every session waits for a go-ahead** after presenting its scope, even with nothing to decide (say "Nothing to decide"). Sessions that "start with their discussion" present their questions (Principle 1), and the go-ahead carries the decisions.
 4. **Spike before queueing** a feasibility claim you can't verify. Split long plans into several sessions.
