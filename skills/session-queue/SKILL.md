@@ -73,6 +73,7 @@ When a conversation changes something a running session needs (a task folded in;
 ### 2. Add a task
 1. **Pick the queue:** with more than one open queue, the one the user named, or ask.
    - **Place it yourself.** Never ask where it goes, or to confirm your choice. The user's placement wins; otherwise pick the best from the topic files and the code: its own row, ordered by dependencies and shared files, or folded into another session (step 4) when that's clearly better (e.g. a small task in the same files). Tell the user in one line where it went and why, with a risk line if the risk isn't low.
+   - **Several tasks at once:** place each one separately, by the rule above. New tasks that belong together can share a session: give the first its own row and fold the others into it. Tell the user where each went, one line per task. Run the parallel check (step 3) once for all the new rows.
    - If it's folded, go to step 4 instead of steps 2–3. Otherwise, write a topic file from `templates/topic.md`: the user's words with the date, the placement and why, what's known, and open questions (Principle 1; none is fine).
 2. Add a row at the chosen place with a targeted edit (`TODO`, or `TODO (after X)` / `TODO (last)`). Use `TODO (placement not decided)` only if the user asks to hold it. Update the ordering notes if needed.
    - **Reordering** means editing Status constraints and the ordering notes. Never renumber.

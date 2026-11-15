@@ -1005,6 +1005,48 @@ def _(c, ctx):
           "doesn't suggest folding into the running session")
 
 
+@scenario("add-list", "Add a list: each task placed on its own, related ones share a session", "rich",
+          ["Add these to the queue: a `truncate(s, n)` helper in strings.py that cuts a string to n "
+           "characters; a CHANGELOG.md; an `is_even(n)` function in a new numbers.py; and an "
+           "`is_odd(n)` function next to it in numbers.py."])
+def _(c, ctx):
+    root = ctx.root
+    rows = table(root)
+    ids0 = [l.split("|")[1].strip() for l in ctx.start["rows"]]
+    new = [k for k in rows if k not in ids0]
+
+    def where(word):
+        """Rows naming the task in their Session cell, or else in their topic file (a cell may
+        say "parity helpers")."""
+        hits = [k for k, r in rows.items() if word in r[0].lower()]
+        return hits or [k for k, r in rows.items() if k not in ids0 or k == "5"
+                        if word in read(root, "queues/" + r[1].strip("`")).lower()]
+
+    trunc, log, even, odd = where("truncate"), where("changelog"), where("is_even"), where("is_odd")
+    c.check(all(len(w) == 1 for w in (trunc, log, even, odd)),
+            f"each task shows in exactly one row (truncate {trunc}, changelog {log}, is_even {even}, is_odd {odd})")
+    c.check(len({*trunc, *log, *even}) == 3, "truncate, CHANGELOG, and the numbers.py pair are in three different rows")
+    c.check(even == odd, f"is_even and is_odd share a session ({even}, {odd})")
+    if trunc == ["5"]:
+        t = read(root, "queues/demo/slugify.md")
+        fold = t.split("## Folded in", 1)[-1] if "## Folded in" in t else ""
+        c.check("truncate" in fold and TODAY in fold, "truncate folded into row 5 with a dated ## Folded in section")
+        c.check(status(root, "5") == "TODO", "row 5 stays TODO")
+    for k in new:
+        st = rows[k][2]
+        c.check(st.startswith("TODO") and "placement not decided" not in st and "pending" not in st,
+                f"new row {k} is placed ({st})")
+    built = [f for f in ("numbers.py", "CHANGELOG.md", "strings.py") if (root / f).exists()]
+    c.check(not built, f"nothing built, only queued ({built or 'no new files'})")
+    judge(c, ctx.out, "The user added four tasks at once. Does the reply say where EACH of the four went "
+          "(its own row, or folded into which session), WITHOUT asking the user to choose or confirm placements?",
+          "reports each placement, no placement question")
+    judge(c, ctx.out, "Does the reply address running the new tasks in parallel at most once, as one offer "
+          "or one explanation covering them together, rather than repeating a parallel offer or "
+          "explanation per task? (Not mentioning parallel sessions at all also counts as yes.)",
+          "parallel check once for the new rows")
+
+
 @scenario("insert", "Insert after row 5 with a new id; never renumber", "rich",
           ["Add to the queue, placed right after session 5: a `title_case(s)` helper in strings.py, with tests."])
 def _(c, ctx):
@@ -1086,7 +1128,7 @@ COVERS = {
     "pace": ["start-new", "next", "resume", "skip", "add-running"],
     "messages between sessions": ["fold-running", "drop-running", "add-running"],
     "start a queue": ["start-new", "start-existing"],
-    "add a task": ["add", "drop", "fold-todo", "fold-running", "add-running", "insert",
+    "add a task": ["add", "add-list", "drop", "fold-todo", "fold-running", "add-running", "insert",
                    "reorder", "drop-folded", "drop-running"],
     "next-session": ["next", "discussion", "claimed", "model-switch", "baseline", "two-ask",
                      "two-named", "approve", "branch-mode", "discuss-decide", "pause",

@@ -17,7 +17,7 @@ The pace flag under the prompt comes from a small hooks module in `hooks/`, writ
 | You type | Claude does |
 |---|---|
 | "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, pace, and notifications in one go, then writes the queue file |
-| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why; writes a topic file and a row; offers to run it in parallel if that's safe |
+| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row; offers to run it in parallel if that's safe |
 | `next-session` | Runs the next placed TODO session (`next-session <name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Set the queue's pace to speed" | Switches between economy, balanced, and speed (see below) |
@@ -74,16 +74,6 @@ Every token in a conversation's context is paid for again on every turn. A long 
 - **Parallel only as fast as you choose.** Parallel sessions don't use fewer tokens than running the same work one after another. Each one usually needs main merged in and the checks rerun, may conflict with another session, and needs its own worktree setup. A background agent also adds its report to the conversation that launched it. Economy runs none, balanced suggests at most two, and speed runs them all. Worktrees keep parallel sessions from clashing, which avoids redoing work after a conflict.
 
 The savings depend on the project and haven't been measured. The biggest are usually the fresh session per item and the short queue file.
-
-## Why not a kanban tool?
-Boards like Vibe Kanban or Backlog.md handle the worktrees and the board, and do it well. This plugin is about the **method**:
-- discussion first;
-- a low, medium, or high risk rating, with the reason, on every option;
-- your approval before every commit and merge;
-- a model for each session;
-- handoffs that survive cleared context.
-
-Use it with Claude Code's own worktree support.
 
 ## Testing
 `test/test_skill.py` is an end-to-end test of the skill. Each scenario builds a throwaway git repo, runs `claude -p` in it with this plugin loaded, and checks the queue, files, and git state it leaves behind. A small model grades the wording of replies.
