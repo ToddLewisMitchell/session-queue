@@ -736,9 +736,13 @@ def _(c, ctx):
 
 # ---- rich fixture ----------------------------------------------------------
 
-PARALLEL_Q = ("Does the reply offer AT MOST TWO sessions to run in parallel, each with a risk line, "
+PARALLEL_Q = ("Does the reply plainly offer ONE OR TWO sessions to run in parallel (not saying it is "
+              "'not offering' any), each with a risk line, "
               "chosen only from sessions {ok}, and NOT offer session(s) {bad} for parallel running? "
               "(Mentioning a session only to say it isn't eligible is fine.)")
+NO_PARALLEL_Q = ("Does the reply AVOID offering, suggesting, or asking about running any session in "
+                 "parallel (a worktree, a background session, or side by side)? (Not mentioning parallel "
+                 "sessions at all counts as yes.)")
 
 
 @scenario("rich-show", "Show a busy queue: paused reason, next row, open rows only", "rich",
@@ -1003,6 +1007,7 @@ def _(c, ctx):
           "reply AVOID suggesting or offering to fold the new truncate task into session 5? (Saying it "
           "could run after session 5, or noting that both touch strings.py, is fine.)",
           "doesn't suggest folding into the running session")
+    judge(c, ctx.out, NO_PARALLEL_Q, "no parallel offer when adding a task")
 
 
 @scenario("add-list", "Add a list: each task placed on its own, related ones share a session", "rich",
@@ -1041,10 +1046,7 @@ def _(c, ctx):
     judge(c, ctx.out, "The user added four tasks at once. Does the reply say where EACH of the four went "
           "(its own row, or folded into which session), WITHOUT asking the user to choose or confirm placements?",
           "reports each placement, no placement question")
-    judge(c, ctx.out, "Does the reply address running the new tasks in parallel at most once, as one offer "
-          "or one explanation covering them together, rather than repeating a parallel offer or "
-          "explanation per task? (Not mentioning parallel sessions at all also counts as yes.)",
-          "parallel check once for the new rows")
+    judge(c, ctx.out, NO_PARALLEL_Q, "no parallel offer when adding tasks")
 
 
 @scenario("insert", "Insert after row 5 with a new id; never renumber", "rich",
