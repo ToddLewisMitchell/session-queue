@@ -1,6 +1,6 @@
 ---
 name: session-queue
-description: Run a project as a Markdown queue of sessions (queue file + topic files, a go-ahead before building, discussion first, risk lines, approval before commits, a pace setting for parallel worktrees, and optional notifications). Use for `next-session`, `parallel-session <id>`, or starting, showing, adding to, reordering, dropping from, pausing, setting the pace of, or closing a queue (`prompts/prompt*.md`).
+description: Run a project as a Markdown queue of sessions (queue file + topic files, a go-ahead before building, discussion first, risk lines, approval before commits, a pace setting for parallel worktrees, and optional notifications). Use for `next-session`, `parallel-session <id>`, or starting, showing, adding to, reordering, dropping from, pausing, setting the pace of, or closing a queue (`queues/queue-*.md`).
 ---
 
 # Session queue

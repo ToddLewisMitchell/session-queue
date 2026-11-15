@@ -33,8 +33,8 @@ limit stopped some (marked LIMIT; the summary prints the rerun command).
     MODEL=opus JOBS=4 BUDGET=3 python3 test/test_skill.py
 
 Sandboxes are kept under test/runs/<timestamp>/<scenario>/, with the
-transcript of replies in claude-output.txt. test/ is excluded via
-.git/info/exclude, so nothing here gets committed.
+transcript of replies in claude-output.txt. test/runs/ is in .gitignore,
+so nothing there gets committed.
 """
 
 import concurrent.futures as cf

@@ -17,7 +17,7 @@ The pace flag under the prompt comes from a small hooks module in `hooks/`, writ
 | You type | Claude does |
 |---|---|
 | "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, pace, and notifications in one go, then writes the queue file |
-| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row |
+| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row, or adds it to that session's topic file |
 | `next-session` | Runs the next placed TODO session (`next-session <name>` if you keep two queues) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Set the queue's pace to speed" | Switches between economy, balanced, and speed (see below) |
@@ -44,11 +44,11 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
   - work on main;
   - a branch per session, merged into main when you approve;
   - main, with a branch only for sessions flagged as risky.
-- **A pace for parallel work**, chosen when the queue starts and changeable any time. It's shown under the prompt (`pace: economy`, `pace: balanced`, or `pace: ⚡ speed`):
+- **A pace for parallel work**, chosen when the queue starts and changeable any time. It's shown under the prompt (`pace: economy`, `pace: balanced`, or `pace: ⚡ speed`; with two open queues on different paces, each queue's name and pace):
   - **economy:** one session at a time, and a parallel session only when you type `parallel-session <id>`. Slowest overall, cheapest;
   - **balanced** (the default): only when `next-session` presents a session's scope, Claude offers up to two independent sessions to run in parallel git worktrees, and splits of big independent parts. Nothing starts without your yes;
   - **speed:** every independent session starts in its own worktree at once, with no cap. Fastest, but it uses up limits soonest and leaves more merges to approve. Commits and merges still wait for you.
-- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (scope, discussion, building, or waiting for approval), so another conversation knows it's taken. Typing `next-session` in a second conversation picks the next free row and, if it can't clash with the running one, runs it in its own worktree. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
+- **Running sessions are claimed.** A session marks its row `IN PROGRESS` with its stage (scope, discussion, building, or waiting for approval), so another conversation knows it's taken. Typing `next-session` in a second conversation names the running session, picks the next free row, and checks that the two can't clash. If the running one holds the main checkout, the new one runs in its own worktree, after your yes. Where the host lets sessions message each other, a conversation that changes a running session's topic file tells it right away. A task added to a running session keeps a placeholder row until it's done, and every session re-reads its topic file before proposing the commit, so a late addition isn't lost.
 - **Sessions can stop early.** If a session hits a blocker, you stop it, or it's too big to finish in one conversation, Claude pauses it. Its notes say what's done and what's left, and the partial work goes on a branch or stays in place, as you choose, so the next `next-session` picks up from there. Checks that were already failing before a session started are recorded as a baseline, not blamed on it. Merge conflicts are shown to you and resolved only with your go-ahead.
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
