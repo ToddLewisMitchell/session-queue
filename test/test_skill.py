@@ -1064,17 +1064,18 @@ def _(c, ctx):
     c.check(all(l in row_lines(root) for l in ctx.start["rows"]), "existing rows untouched")
 
 
-@scenario("reorder", "Reorder by status constraints, never renumbering", "rich",
+@scenario("reorder", "Reorder by moving the row, never renumbering", "rich",
           ["Reorder the queue: session 7 should run before session 5."])
 def _(c, ctx):
     root = ctx.root
     ids0 = [l.split("|")[1].strip() for l in ctx.start["rows"]]
-    c.check(set(table(root)) == set(ids0), "same ids")
-    c.check(status(root, "5").startswith("TODO") and "after 7" in status(root, "5"),
-            f"row 5 now waits for 7 ({status(root, '5')})")
+    ids = list(table(root))
+    c.check(set(ids) == set(ids0), "same ids")
+    c.check(ids.index("7") < ids.index("5"), f"row 7 now sits above row 5 ({ids})")
+    c.check(status(root, "5").startswith("TODO"), f"row 5 still TODO ({status(root, '5')})")
     c.check(status(root, "7").startswith("TODO") and "after 5" not in status(root, "7"), "row 7 unconstrained by 5")
-    if list(table(root)) != ids0:
-        c.warn("rows were moved in the table (allowed, but status constraints are the skill's way)")
+    if "after 7" not in status(root, "5"):
+        c.warn("row 5's status doesn't say after 7 (fine if row order alone carries it)")
 
 
 @scenario("drop-folded", "Drop a folded task: '+ title' removed, section marked dropped", "rich",
