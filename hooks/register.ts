@@ -1,9 +1,11 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
 import { guard } from './guard'
-import { openQueues, type Queue } from './queues'
+import { openQueues, pickQueues } from './queues'
+import { refresh } from './status'
 
-// Four jobs, all read from the open queue files:
+// Five jobs, all read from the open queue files:
 // - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
@@ -16,36 +18,20 @@ import { openQueues, type Queue } from './queues'
 //   reading them.
 // - The commit guard (`guard.ts`): commits, merges, and pushes ask first, as
 //   the Commits setting says.
+// - Slash commands (`commands.ts`): `/queue` shows the queue, and
+//   `/queue-<setting>` changes one settings line, with no model turn.
 
-// `next-session`, optionally followed by a queue name, and nothing else.
-const NEXT = /^\s*next-session(?:\s+([\w-]+))?\s*$/
+// `next-session`, optionally followed by a queue name, and nothing else, in
+// any case (`Next-session` too).
+const NEXT = /^\s*next-session(?:\s+([\w-]+))?\s*$/i
 // Agents whose report would be lost if the conversation were cleared.
 const BUSY = new Set(['pending', 'running', 'waiting'])
-
-const label = (q: Queue) =>
-  [
-    q.pace === 'speed' ? `⚡ ${q.pace}` : q.pace,
-    q.autoGoAhead ? 'auto go-ahead' : '',
-    q.autoCommit ? 'auto-commit' : '',
-  ].filter(Boolean)
-
-async function refresh($: EngineInterface) {
-  const queues = await openQueues($)
-  if (queues.length === 0) return $.ui.status(undefined)
-  const labels = queues.map(q => label(q))
-  $.ui.status(
-    new Set(labels.map(l => l.join())).size === 1
-      ? `pace: ${labels[0]!.join(' · ')}`
-      : queues.map((q, i) => `${q.name}: ${labels[i]!.join(', ')}`).join(' · '),
-  )
-}
 
 // Whether to clear before this `next-session`: the queue it names (or, unnamed,
 // every open queue) has Clear on, the conversation has messages, and no
 // background agent of this conversation is still at work.
 async function shouldClear($: EngineInterface, named: string | undefined) {
-  const queues = await openQueues($)
-  const picked = named === undefined ? queues : queues.filter(q => q.name === named)
+  const picked = pickQueues(await openQueues($), named)
   if (picked.length === 0 || !picked.every(q => q.clear)) return false
   const last = await $.session.messages({ last: 1 })
   if ('deny' in last || last.length === 0) return false
@@ -60,6 +46,7 @@ const CLEARED_FOR_MS = 60_000
 
 export const register: Register = on => {
   guard(on)
+  commands(on)
 
   // The first message after the clear carries the queue files as a context
   // block of their own.
@@ -75,6 +62,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const done = await next(e)
     await refresh($).catch(() => undefined)
+    // On an engine without the command API, the session still starts.
+    await registerCommands($).catch(() => undefined)
     return done
   })
 

@@ -10,7 +10,7 @@
 
 To try a local copy instead, point Claude Code at the folder: `/plugin marketplace add /path/to/session-queue`.
 
-The flags under the prompt, the automatic `/clear` before `next-session`, the queue files attached to `next-session`, and the commit guard come from a small hooks module in `hooks/`, written against Claude Code 2.1.322 (the clear, the attached files, and the guard against 2.1.328). On a version without hooks modules, none of them happens; the rest of the plugin is unaffected.
+The flags under the prompt, the automatic `/clear` before `next-session`, the queue files attached to `next-session`, the commit guard, and the `/queue` commands come from a small hooks module in `hooks/`, written against Claude Code 2.1.322 (the clear, the attached files, the guard, and the commands against 2.1.328). On a version without hooks modules, none of them happens; the rest of the plugin is unaffected.
 
 ## Use
 
@@ -57,6 +57,7 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 - **Commits that can't slip through.** While a queue is open, a git command that makes a commit or a merge (`commit`, `merge`, `pull`, `cherry-pick`, `revert`, `am`, or `rebase`) brings up a permission dialog unless auto-commit is on, and a `git push` always does. A subagent's commit, merge, or push is refused (a background session leaves committing to you), and so is force-staging a `queues/` folder that git ignores. Claude still asks you in the conversation first; the dialog is the backstop.
 - **A fresh context for every session.** Typing `next-session` in a conversation that's already been used clears it first (`/clear`), then runs `next-session` in the empty one. It won't clear while a background session is still running there. Turn it off per queue with the Clear setting.
 - **A quicker start.** `next-session` arrives with the queue file and the next session's topic file already attached, so Claude doesn't spend tool calls reading them.
+- **Settings and status without a model turn.** `/queue` shows the open sessions, what `next-session` runs next, and the settings. `/queue-pace`, `/queue-go-ahead`, `/queue-commits`, `/queue-clear`, and `/queue-notify` change one setting in the queue file (for example `/queue-pace speed`; add the queue's name when two are open). `next-session` works in any case (`Next-session` too).
 - **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
 ## How it keeps token use down

@@ -244,3 +244,22 @@ test('a clear whose conversation never starts goes stale', async ($, on) => {
   await clock.advance(120_000)
   expect((await $.prompt.context({ blocks: [] })).blocks).toEqual([])
 })
+
+// --- Case-insensitive next-session -----------------------------------------
+
+test('Next-session in capitals clears and attaches too', async ($, on) => {
+  const queue = TABLE(['| 1 | Next | `d/next.md` | TODO | opus |'])
+  const { clock, calls } = fakeSession(on, { 'queue-demo.md': queue, 'next.md': 'NEXT TOPIC' })
+  await typed($, 'Next-session')
+  await clock.settle()
+  expect(calls).toEqual(['/clear', 'Next-session'])
+})
+
+test('a queue name matches in any case', async ($, on) => {
+  const queue = TABLE(['| 1 | Next | `d/next.md` | TODO | opus |'])
+  const { clock, calls, context } = fakeSession(on, { 'queue-Demo.md': queue, 'next.md': 'NEXT TOPIC' }, { messages: 0 })
+  await typed($, 'NEXT-SESSION demo')
+  await clock.settle()
+  expect(calls).toEqual(['NEXT-SESSION demo'])
+  expect(context[0]?.join('\n') ?? '').toContain('NEXT TOPIC')
+})
