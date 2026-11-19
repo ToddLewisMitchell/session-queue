@@ -1,6 +1,8 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { guard } from './guard'
+import { openQueues, type Queue } from './queues'
 
-// Two jobs, both read from the open queue files:
+// Three jobs, all read from the open queue files:
 // - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
@@ -8,23 +10,13 @@ import type { EngineInterface, Register } from 'claude-code'
 // - Clear: when the user types `next-session` in a conversation that already
 //   has messages, run `/clear` first and then `next-session` in the fresh
 //   conversation, unless the queue's Clear line is `off`.
+// - The commit guard (`guard.ts`): commits, merges, and pushes ask first, as
+//   the Commits setting says.
 
-const QUEUE = /^queue-(.+)\.md$/
-const PACE = /^\*\*Pace\.\*\*\s*(economy|balanced|speed)\b/m
-const GO_AHEAD = /^\*\*Go-ahead\.\*\*\s*(ask|auto)\b/m
-const COMMITS = /^\*\*Commits\.\*\*\s*(approve|auto)\b/m
-const CLEAR = /^\*\*Clear\.\*\*\s*(auto|off)\b/m
-// A closed queue has a line starting "Closed <date>, a record only." under its
-// title. Anchoring to the line start skips a successor's "Successor to ...
-// (closed ..., a record only)" and any row or note that mentions both words.
-const CLOSED = /^Closed\b[^\n]*\brecord only\b/im
 // `next-session`, optionally followed by a queue name, and nothing else.
 const NEXT = /^\s*next-session(?:\s+([\w-]+))?\s*$/
 // Agents whose report would be lost if the conversation were cleared.
 const BUSY = new Set(['pending', 'running', 'waiting'])
-
-type Pace = 'economy' | 'balanced' | 'speed'
-type Queue = { name: string; pace: Pace; autoGoAhead: boolean; autoCommit: boolean; clear: boolean }
 
 const label = (q: Queue) =>
   [
@@ -32,35 +24,6 @@ const label = (q: Queue) =>
     q.autoGoAhead ? 'auto go-ahead' : '',
     q.autoCommit ? 'auto-commit' : '',
   ].filter(Boolean)
-
-async function openQueues($: EngineInterface) {
-  let entries
-  try {
-    entries = await $.fs.list('queues')
-  } catch {
-    return []
-  }
-  const queues: Queue[] = []
-  for (const entry of entries) {
-    const m = entry.kind === 'file' ? QUEUE.exec(entry.name) : null
-    if (!m) continue
-    let text: string
-    try {
-      text = await $.fs.read(`queues/${entry.name}`)
-    } catch {
-      continue
-    }
-    if (CLOSED.test(text)) continue
-    queues.push({
-      name: m[1] ?? '',
-      pace: (PACE.exec(text)?.[1] as Pace) ?? 'balanced',
-      autoGoAhead: GO_AHEAD.exec(text)?.[1] === 'auto',
-      autoCommit: COMMITS.exec(text)?.[1] === 'auto',
-      clear: CLEAR.exec(text)?.[1] !== 'off',
-    })
-  }
-  return queues
-}
 
 async function refresh($: EngineInterface) {
   const queues = await openQueues($)
@@ -86,6 +49,8 @@ async function shouldClear($: EngineInterface, named: string | undefined) {
 }
 
 export const register: Register = on => {
+  guard(on)
+
   on('session.start', async ($, e, next) => {
     const done = await next(e)
     await refresh($).catch(() => undefined)
