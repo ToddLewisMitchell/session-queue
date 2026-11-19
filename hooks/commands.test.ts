@@ -53,7 +53,7 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-pace', 'queue-go-ahead', 'queue-commits', 'queue-clear', 'queue-notify'])
+  expect(registered).toEqual(['queue', 'queue-pace', 'queue-go-ahead', 'queue-commits', 'queue-clear', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {

@@ -2,10 +2,11 @@ import type { EngineInterface, Register } from 'claude-code'
 import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
 import { guard } from './guard'
+import { pane, registerPaneCommand } from './pane'
 import { openQueues, pickQueues } from './queues'
 import { refresh } from './status'
 
-// Five jobs, all read from the open queue files:
+// Six jobs, all read from the open queue files:
 // - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
@@ -20,6 +21,8 @@ import { refresh } from './status'
 //   the Commits setting says.
 // - Slash commands (`commands.ts`): `/queue` shows the queue, and
 //   `/queue-<setting>` changes one settings line, with no model turn.
+// - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows,
+//   redrawn whenever the status line is refreshed.
 
 // `next-session`, optionally followed by a queue name, and nothing else, in
 // any case (`Next-session` too).
@@ -47,6 +50,7 @@ const CLEARED_FOR_MS = 60_000
 export const register: Register = on => {
   guard(on)
   commands(on)
+  pane(on)
 
   // The first message after the clear carries the queue files as a context
   // block of their own.
@@ -64,6 +68,7 @@ export const register: Register = on => {
     await refresh($).catch(() => undefined)
     // On an engine without the command API, the session still starts.
     await registerCommands($).catch(() => undefined)
+    await registerPaneCommand($).catch(() => undefined)
     return done
   })
 

@@ -131,8 +131,11 @@ export const isOpen = (r: Row) => !FINISHED.test(r.status)
 // another row is open. Held and folded rows don't count as open here, since
 // they don't run as they stand. Picking exactly is the skill's judgment
 // (claims, a PAUSED blocker), so this only guesses.
-export function nextRow(text: string): Row | undefined {
-  const all = rows(text)
+export const nextRow = (text: string) => nextRowOf(rows(text))
+
+// The same, from rows already parsed: the row returned is one of `all`, so a
+// caller can tell it by identity even when two rows share an id.
+export function nextRowOf(all: Row[]): Row | undefined {
   const open = new Set(all.filter(r => isOpen(r) && !HELD.test(r.status)).map(r => r.id))
   return all.find(r => {
     if (!RUNNABLE.test(r.status) || HELD.test(r.status)) return false
