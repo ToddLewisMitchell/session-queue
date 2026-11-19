@@ -1129,6 +1129,7 @@ COVERS = {
     "branching": ["branch-mode", "pause", "resume", "approve", "start-new"],
     "notifications": ["start-new"],
     "pace": ["start-new", "next", "resume", "skip", "add-running"],
+    "go-ahead, commits, and clear": ["start-new", "next", "approve"],
     "messages between sessions": ["fold-running", "drop-running", "add-running"],
     "start a queue": ["start-new", "start-existing"],
     "add a task": ["add", "add-list", "drop", "fold-todo", "fold-running", "add-running", "insert",

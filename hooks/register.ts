@@ -1,20 +1,37 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-// Shows each open queue's Pace under the prompt, so the user always knows
-// whether `speed` (every eligible row runs in parallel) is on. It re-reads the
-// queue files when the session starts and after every turn, so a Pace change
-// shows up as soon as the turn that made it ends.
+// Two jobs, both read from the open queue files:
+// - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
+//   `auto-commit` when those settings are on, so the user always knows how
+//   much runs without asking them. Re-read when the session starts and after
+//   every turn, so a change shows as soon as the turn that made it ends.
+// - Clear: when the user types `next-session` in a conversation that already
+//   has messages, run `/clear` first and then `next-session` in the fresh
+//   conversation, unless the queue's Clear line is `off`.
 
 const QUEUE = /^queue-(.+)\.md$/
 const PACE = /^\*\*Pace\.\*\*\s*(economy|balanced|speed)\b/m
+const GO_AHEAD = /^\*\*Go-ahead\.\*\*\s*(ask|auto)\b/m
+const COMMITS = /^\*\*Commits\.\*\*\s*(approve|auto)\b/m
+const CLEAR = /^\*\*Clear\.\*\*\s*(auto|off)\b/m
 // A closed queue has a line starting "Closed <date>, a record only." under its
 // title. Anchoring to the line start skips a successor's "Successor to ...
 // (closed ..., a record only)" and any row or note that mentions both words.
 const CLOSED = /^Closed\b[^\n]*\brecord only\b/im
+// `next-session`, optionally followed by a queue name, and nothing else.
+const NEXT = /^\s*next-session(?:\s+([\w-]+))?\s*$/
+// Agents whose report would be lost if the conversation were cleared.
+const BUSY = new Set(['pending', 'running', 'waiting'])
 
 type Pace = 'economy' | 'balanced' | 'speed'
+type Queue = { name: string; pace: Pace; autoGoAhead: boolean; autoCommit: boolean; clear: boolean }
 
-const label = (pace: Pace) => (pace === 'speed' ? `⚡ ${pace}` : pace)
+const label = (q: Queue) =>
+  [
+    q.pace === 'speed' ? `⚡ ${q.pace}` : q.pace,
+    q.autoGoAhead ? 'auto go-ahead' : '',
+    q.autoCommit ? 'auto-commit' : '',
+  ].filter(Boolean)
 
 async function openQueues($: EngineInterface) {
   let entries
@@ -23,7 +40,7 @@ async function openQueues($: EngineInterface) {
   } catch {
     return []
   }
-  const queues: { name: string; pace: Pace }[] = []
+  const queues: Queue[] = []
   for (const entry of entries) {
     const m = entry.kind === 'file' ? QUEUE.exec(entry.name) : null
     if (!m) continue
@@ -34,7 +51,13 @@ async function openQueues($: EngineInterface) {
       continue
     }
     if (CLOSED.test(text)) continue
-    queues.push({ name: m[1] ?? '', pace: (PACE.exec(text)?.[1] as Pace) ?? 'balanced' })
+    queues.push({
+      name: m[1] ?? '',
+      pace: (PACE.exec(text)?.[1] as Pace) ?? 'balanced',
+      autoGoAhead: GO_AHEAD.exec(text)?.[1] === 'auto',
+      autoCommit: COMMITS.exec(text)?.[1] === 'auto',
+      clear: CLEAR.exec(text)?.[1] !== 'off',
+    })
   }
   return queues
 }
@@ -42,12 +65,24 @@ async function openQueues($: EngineInterface) {
 async function refresh($: EngineInterface) {
   const queues = await openQueues($)
   if (queues.length === 0) return $.ui.status(undefined)
-  const paces = new Set(queues.map(q => q.pace))
+  const labels = queues.map(q => label(q))
   $.ui.status(
-    paces.size === 1
-      ? `pace: ${label([...paces][0] as Pace)}`
-      : queues.map(q => `${q.name}: ${label(q.pace)}`).join(' · '),
+    new Set(labels.map(l => l.join())).size === 1
+      ? `pace: ${labels[0]!.join(' · ')}`
+      : queues.map((q, i) => `${q.name}: ${labels[i]!.join(', ')}`).join(' · '),
   )
+}
+
+// Whether to clear before this `next-session`: the queue it names (or, unnamed,
+// every open queue) has Clear on, the conversation has messages, and no
+// background agent of this conversation is still at work.
+async function shouldClear($: EngineInterface, named: string | undefined) {
+  const queues = await openQueues($)
+  const picked = named === undefined ? queues : queues.filter(q => q.name === named)
+  if (picked.length === 0 || !picked.every(q => q.clear)) return false
+  const last = await $.session.messages({ last: 1 })
+  if ('deny' in last || last.length === 0) return false
+  return !(await $.agent.list()).some(a => BUSY.has(a.status))
 }
 
 export const register: Register = on => {
@@ -61,5 +96,22 @@ export const register: Register = on => {
     const done = await next(e)
     if (e.agentId === undefined) await refresh($).catch(() => undefined)
     return done
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    // Only the user's own typing (terminal or phone), between turns.
+    const m = NEXT.exec(e.text)
+    const typed = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
+    if (!m || !typed || e.command || e.isMeta || e.turnId !== undefined) return next(e)
+    if (!(await shouldClear($, m[1]).catch(() => false))) return next(e)
+    const text = e.text.trim()
+    // The clear and the resubmit outlive this dispatch, so they run on a timer.
+    $.clock.after(0, () => {
+      void $.command
+        .run({ command: 'clear' })
+        .catch(() => $.ui.toast('session-queue: couldn’t clear; running next-session here'))
+        .then(() => $.prompt.submit({ text }))
+    })
+    return { drop: `Clearing the conversation, then running ${text}` }
   })
 }
