@@ -7,7 +7,7 @@ import { openQueues, pickQueues } from './queues'
 import { refresh } from './status'
 
 // Six jobs, all read from the open queue files:
-// - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
+// - Under the prompt: each open queue's Parallels setting, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
 //   every turn, so a change shows as soon as the turn that made it ends.

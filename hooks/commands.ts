@@ -18,11 +18,13 @@ type Setting = {
   section: string
   // Each value, with the template's explanation where it has one.
   values: Record<string, string>
+  // The line's older name, replaced by a change when the new one is missing.
+  legacy?: string
 }
 
 const GACC = 'Go-ahead, Commits, and Clear'
 export const SETTINGS: readonly Setting[] = [
-  { command: 'queue-pace', name: 'Pace', section: 'Pace', values: { economy: '', balanced: '', speed: '' } },
+  { command: 'queue-parallels', name: 'Parallels', section: 'Parallels', values: { off: '', ask: '', auto: '' }, legacy: 'Pace' },
   {
     command: 'queue-go-ahead',
     name: 'Go-ahead',
@@ -49,8 +51,9 @@ export const SETTINGS: readonly Setting[] = [
   },
 ]
 
-// The settings lines in the template's order, for placing a missing one.
-const ORDER = ['Branching', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Notify']
+// The settings lines in the template's order, for placing a missing one. `Pace`
+// is the older name of the Parallels line, still found in older queues.
+const ORDER = ['Branching', 'Parallels', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Notify']
 
 // `[^\\r\\n]*` rather than `.*`, so a Windows line ending stays.
 const lineOf = (name: string) => new RegExp(`^\\*\\*${name}\\.\\*\\*[^\\r\\n]*`, 'mi')
@@ -67,9 +70,12 @@ function today(ms: number) {
 // else before the first `##` heading, else at the end).
 export function setLine(text: string, s: Setting, value: string, date: string) {
   const why = s.values[value]
-  const old = lineOf(s.name).exec(text)
-  // The old line's notes after `(chosen <date>;`, kept; else the template's.
-  const notes = old ? /\(chosen [^;)]*;\s*(.*)\)\.?\s*$/.exec(old[0])?.[1] : undefined
+  const old = lineOf(s.name).exec(text) ?? (s.legacy ? lineOf(s.legacy).exec(text) : null)
+  // The old line's notes after `(chosen <date>;`, kept (an older name's section
+  // renamed); else the template's.
+  const notes = old
+    ? /\(chosen [^;)]*;\s*(.*)\)\.?\s*$/.exec(old[0])?.[1]?.replace(new RegExp(`\\b${s.legacy ?? s.name} section\\b`), `${s.section} section`)
+    : undefined
   const line = `**${s.name}.** ${value}${why ? `: ${why}` : ''} (chosen ${date}; ${notes ?? `see the skill's ${s.section} section`}).`
   if (old) return text.slice(0, old.index) + line + text.slice(old.index + old[0].length)
   const nl = text.includes('\r\n') ? '\r\n' : '\n'
@@ -99,7 +105,7 @@ function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
 
 const settingsSummary = (q: Queue) =>
   [
-    `pace ${q.pace}`,
+    `parallels ${q.parallels}`,
     `go-ahead ${q.autoGoAhead ? 'auto' : 'ask'}`,
     `commits ${q.autoCommit ? 'auto' : 'approve'}`,
     `clear ${q.clear ? 'auto' : 'off'}`,

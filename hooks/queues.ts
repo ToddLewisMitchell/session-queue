@@ -17,21 +17,23 @@ export function settingValue(text: string, name: string): string | undefined {
   return new RegExp(`^\\*\\*${escaped}\\.\\*\\*[ \\t]*([\\w-]+)`, 'mi').exec(text)?.[1]?.toLowerCase()
 }
 
-export type Pace = 'economy' | 'balanced' | 'speed'
+export type Parallels = 'off' | 'ask' | 'auto'
 export type Queue = {
   name: string
   // The queue folder and the queue file's own text, for the context attached at
   // next-session (`context.ts`) and the slash commands (`commands.ts`).
   dir: string
   text: string
-  pace: Pace
+  parallels: Parallels
   autoGoAhead: boolean
   autoCommit: boolean
   clear: boolean
   notify: boolean
 }
 
-const PACES: readonly string[] = ['economy', 'balanced', 'speed']
+const PARALLELS: readonly string[] = ['off', 'ask', 'auto']
+// An older queue's Pace line, read as the Parallels setting it became.
+const FROM_PACE: Record<string, Parallels> = { economy: 'off', balanced: 'ask', speed: 'auto' }
 
 // The queue folder sits at the main checkout's root. A session in a git
 // worktree (`.claude/worktrees/...`) doesn't have it when git ignores it, so
@@ -52,12 +54,15 @@ async function queueEntries($: EngineInterface) {
 }
 
 export function parseQueue(name: string, dir: string, text: string): Queue {
+  const set = settingValue(text, 'Parallels')
   const pace = settingValue(text, 'Pace')
+  const parallels =
+    set !== undefined ? (PARALLELS.includes(set) ? (set as Parallels) : undefined) : pace !== undefined && Object.hasOwn(FROM_PACE, pace) ? FROM_PACE[pace] : undefined
   return {
     name,
     dir,
     text,
-    pace: pace !== undefined && PACES.includes(pace) ? (pace as Pace) : 'balanced',
+    parallels: parallels ?? 'ask',
     autoGoAhead: settingValue(text, 'Go-ahead') === 'auto',
     autoCommit: settingValue(text, 'Commits') === 'auto',
     clear: settingValue(text, 'Clear') !== 'off',

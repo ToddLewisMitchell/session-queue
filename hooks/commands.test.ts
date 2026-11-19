@@ -53,13 +53,13 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-pace', 'queue-go-ahead', 'queue-commits', 'queue-clear', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-commits', 'queue-clear', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo: pace economy · go-ahead ask · commits approve · clear auto · notify off')
+  expect(text).toContain('Queue demo: parallels off · go-ahead ask · commits approve · clear auto · notify off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')
@@ -68,24 +68,25 @@ test('/queue shows the open rows, the next row, and the settings', async ($, on)
 })
 
 test('/queue with two queues shows both, or the one named in any case', async ($, on) => {
-  fakeFolder(on, { 'queue-a.md': QUEUE, 'queue-b.md': '**Pace.** speed\n' })
-  expect((await run($, 'queue')).text).toContain('Queue b: pace speed')
+  fakeFolder(on, { 'queue-a.md': QUEUE, 'queue-b.md': '**Parallels.** auto\n' })
+  expect((await run($, 'queue')).text).toContain('Queue b: parallels auto')
   const one = (await run($, 'queue', 'A')).text
   expect(one).toContain('Queue a:')
   expect(one).not.toContain('Queue b:')
   expect((await run($, 'queue', 'c')).text).toBe('No open queue named c. Open: a, b.')
 })
 
-test('/queue-pace rewrites the line with today\'s date and refreshes the status', async ($, on) => {
+test('/queue-parallels replaces an older Pace line with today\'s date and refreshes the status', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   const { shown, clock } = fakeFolder(on, files)
   await clock.set(new Date(2026, 10, 20, 12).getTime())
-  const { text } = await run($, 'queue-pace', 'Speed')
-  expect(text).toBe('Queue demo: Pace set to speed.')
-  // The old line's own notes stay; only the value and the date change.
-  expect(files['queue-demo.md']).toContain("**Pace.** speed (chosen 2026-11-20; parallel runs would conflict; see the skill's Pace section).\n\n**Commits.**")
+  const { text } = await run($, 'queue-parallels', 'Auto')
+  expect(text).toBe('Queue demo: Parallels set to auto.')
+  // The old line's own notes stay, its section renamed; the name, value, and date change.
+  expect(files['queue-demo.md']).toContain("**Parallels.** auto (chosen 2026-11-20; parallel runs would conflict; see the skill's Parallels section).\n\n**Commits.**")
   expect(files['queue-demo.md']).not.toContain('economy')
-  expect(shown.at(-1)).toBe('pace: ⚡ speed')
+  expect(files['queue-demo.md']).not.toContain('**Pace.**')
+  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
 })
 
 test('a missing line goes where the template puts it', async ($, on) => {
@@ -121,11 +122,11 @@ test('the same value again changes nothing', async ($, on) => {
 })
 
 test('setLine with no settings lines goes before the first heading, or at the end', () => {
-  const pace = SETTINGS[0]!
-  expect(setLine('# T\n\n## Sessions\n', pace, 'speed', '2026-11-20')).toBe(
-    "# T\n\n**Pace.** speed (chosen 2026-11-20; see the skill's Pace section).\n\n## Sessions\n",
+  const parallels = SETTINGS[0]!
+  expect(setLine('# T\n\n## Sessions\n', parallels, 'auto', '2026-11-20')).toBe(
+    "# T\n\n**Parallels.** auto (chosen 2026-11-20; see the skill's Parallels section).\n\n## Sessions\n",
   )
-  expect(setLine('# T\n', pace, 'speed', '2026-11-20')).toBe("# T\n\n**Pace.** speed (chosen 2026-11-20; see the skill's Pace section).\n")
+  expect(setLine('# T\n', parallels, 'auto', '2026-11-20')).toBe("# T\n\n**Parallels.** auto (chosen 2026-11-20; see the skill's Parallels section).\n")
 })
 
 test('nextRow skips rows after an open row, and last while others are open', () => {
@@ -137,7 +138,7 @@ test('nextRow skips rows after an open row, and last while others are open', () 
 test('an inherited key is not a value', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-pace', 'constructor')).text).toBe('Usage: /queue-pace <economy|balanced|speed> [queue]')
+  expect((await run($, 'queue-parallels', 'constructor')).text).toBe('Usage: /queue-parallels <off|ask|auto> [queue]')
   expect(files['queue-demo.md']).toBe(QUEUE)
 })
 
@@ -150,14 +151,14 @@ test('a queue named like a value is still named', async ($, on) => {
 
 test('a failed write says so', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE }, { failWrite: true })
-  expect((await run($, 'queue-pace', 'speed')).text).toBe("Couldn't update queues/queue-demo.md; nothing was changed.")
+  expect((await run($, 'queue-parallels', 'auto')).text).toBe("Couldn't update queues/queue-demo.md; nothing was changed.")
 })
 
 test('Windows line endings are kept', () => {
   const crlf = QUEUE.replace(/\n/g, '\r\n')
-  const out = setLine(setLine(crlf, SETTINGS[0]!, 'speed', '2026-11-20'), SETTINGS[4]!, 'on', '2026-11-20')
+  const out = setLine(setLine(crlf, SETTINGS[0]!, 'auto', '2026-11-20'), SETTINGS[4]!, 'on', '2026-11-20')
   expect(out.replace(/\r\n/g, '').includes('\n')).toBe(false)
-  expect(out).toContain('**Pace.** speed (chosen 2026-11-20; parallel runs would conflict;')
+  expect(out).toContain('**Parallels.** auto (chosen 2026-11-20; parallel runs would conflict;')
 })
 
 test('nextRow: held rows do not block last; every id after "after" counts', () => {

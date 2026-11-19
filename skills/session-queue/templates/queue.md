@@ -10,7 +10,7 @@
 
 **Branching.** <work on main | branch per session | branch for risky sessions> (chosen <date>; see the skill's Branching section).
 
-**Pace.** <economy | balanced | speed> (chosen <date>; see the skill's Pace section).
+**Parallels.** <off | ask | auto> (chosen <date>; see the skill's Parallels section).
 
 **Go-ahead.** <ask | auto: start building without waiting when there's nothing to decide> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 

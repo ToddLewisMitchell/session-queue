@@ -11,13 +11,13 @@ Where the host has a multiple-choice tool (e.g. `AskUserQuestion`), use it for e
    - **close it and roll over** (workflow 5). Risk: low.
    - **start a second queue alongside.** Risk: medium, because the overlap check (workflow 4) only compares rows within one queue.
 2. **Goal and name.** Wait for the answer. With the tool, offer up to three goals inferred from the repo (its name, README, recent commits, open issues), each with a queue name; the user can type their own. With nothing to infer from, ask in plain text. Names are lowercase and hyphenated (`bug-fixes`). Never overwrite an existing `queue-<name>.md`.
-3. **Then, in two calls** (the tool takes four questions at most): first the queue folder, branching, Pace, and Notify; then Go-ahead, Commits, and Clear.
+3. **Then, in two calls** (the tool takes four questions at most): first the queue folder, branching, Parallels, and Notify; then Go-ahead, Commits, and Clear.
    - whether the queue folder is committed;
    - the **branching mode**, using the comparison in `branching.md` (next to this file). Text written before the dialog may be hidden while it's open, so put each mode's column (how it works, pros, cons, risk) in that option's preview. Without the tool, show the table in the message;
-   - the **Pace**: how much runs in parallel (see **Pace** in `SKILL.md`). Options:
-     - **economy:** one session at a time, slowest overall but cheapest. Risk: low.
-     - ★ **balanced:** up to two parallel offers, each needing a yes. Risk: low.
-     - **speed:** every eligible row starts at once, fastest but uses up limits soonest, with more merges to approve. Risk: medium.
+   - **Parallels**: how much runs in parallel (see **Parallels** in `SKILL.md`). Options:
+     - **off:** one session at a time, slowest overall but cheapest. Risk: low.
+     - ★ **ask:** up to two parallel offers, each needing a yes. Risk: low.
+     - **auto:** every eligible row starts at once, fastest but uses up limits soonest, with more merges to approve. Risk: medium.
    - **Go-ahead:** ★ **ask** (wait for a go-ahead every session; Risk: low), or **auto** (start building at once when there's nothing to decide; Risk: low, because any question still stops it).
    - **Commits:** ★ **approve** (Risk: low), or **auto** (commit and merge without waiting when the Checks and code review pass; Risk: medium, because a bad change can reach main unseen). Pushing always asks.
    - **Clear:** ★ **auto** (`next-session` clears a used conversation first; Risk: low), or **off** (keep the conversation; Risk: low, but costs more tokens).

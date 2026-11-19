@@ -15,16 +15,22 @@ function fakeQueues(on: any, files: Record<string, string>) {
 
 const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
-test('speed shows a flag', async ($, on) => {
-  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Pace.** speed (chosen 2026-11-13).\n' })
+test('auto shows a flag', async ($, on) => {
+  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Parallels.** auto (chosen 2026-11-13).\n' })
   await start($)
-  expect(shown.at(-1)).toBe('pace: ⚡ speed')
+  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
 })
 
-test('a missing Pace line is balanced', async ($, on) => {
+test('an older Pace line reads as Parallels; a Parallels line wins over it', async ($, on) => {
+  const shown = fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
+  await start($)
+  expect(shown.at(-1)).toBe('a: off · b: ask')
+})
+
+test('a missing Parallels line is ask', async ($, on) => {
   const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
-  expect(shown.at(-1)).toBe('pace: balanced')
+  expect(shown.at(-1)).toBe('parallels: ask')
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
@@ -34,7 +40,7 @@ test('a closed queue is ignored; its successor counts', async ($, on) => {
     'notes.md': '**Pace.** speed\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('pace: economy')
+  expect(shown.at(-1)).toBe('parallels: off')
 })
 
 test('a row that mentions closing a record stays open', async ($, on) => {
@@ -42,16 +48,16 @@ test('a row that mentions closing a record stays open', async ($, on) => {
     'queue-demo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('pace: ⚡ speed')
+  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
 })
 
-test('two queues on different paces are named', async ($, on) => {
+test('two queues on different Parallels settings are named', async ($, on) => {
   const shown = fakeQueues(on, {
     'queue-a.md': '**Pace.** speed\n',
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('a: ⚡ speed · b: balanced')
+  expect(shown.at(-1)).toBe('a: ⚡ auto · b: ask')
 })
 
 test('no queue folder clears the line', async ($, on) => {
@@ -68,13 +74,13 @@ test('auto go-ahead and auto-commit join the flag', async ($, on) => {
     'queue-demo.md': '**Pace.** speed\n\n**Go-ahead.** auto (chosen 2026-11-19)\n\n**Commits.** auto (chosen 2026-11-19)\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('pace: ⚡ speed · auto go-ahead · auto-commit')
+  expect(shown.at(-1)).toBe('parallels: ⚡ auto · auto go-ahead · auto-commit')
 })
 
 test('ask and approve add nothing', async ($, on) => {
   const shown = fakeQueues(on, { 'queue-demo.md': '**Go-ahead.** ask\n\n**Commits.** approve\n' })
   await start($)
-  expect(shown.at(-1)).toBe('pace: balanced')
+  expect(shown.at(-1)).toBe('parallels: ask')
 })
 
 test('two queues with different settings are named', async ($, on) => {
@@ -83,7 +89,7 @@ test('two queues with different settings are named', async ($, on) => {
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('a: balanced, auto-commit · b: balanced')
+  expect(shown.at(-1)).toBe('a: ask, auto-commit · b: ask')
 })
 
 // --- Clear before next-session ---------------------------------------------

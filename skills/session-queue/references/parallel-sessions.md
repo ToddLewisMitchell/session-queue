@@ -1,6 +1,6 @@
 # Running a parallel session (workflow 4)
 
-Read this before starting a parallel session: `parallel-session <id>`, `next-session` beside a session in the main checkout (workflow 3, step 1), a yes to an offer, or the speed Pace. Section and workflow numbers refer to `SKILL.md`; eligibility is in its workflow 4.
+Read this before starting a parallel session: `parallel-session <id>`, `next-session` beside a session in the main checkout (workflow 3, step 1), a yes to an offer, or Parallels `auto`. Section and workflow numbers refer to `SKILL.md`; eligibility is in its workflow 4.
 
 1. **Get a worktree on branch `q/<id>-<slug>`,** `<main>` being the default branch. First, unless `git check-ignore -q .claude/worktrees/x` succeeds, add `.claude/worktrees/` to `$(git rev-parse --git-common-dir)/info/exclude` (local, never committed), so worktree files don't show as untracked in the main checkout.
    - **Typed in a new conversation** (either command): make it with git at `.claude/worktrees/<id>-<slug>` in the main checkout, then `EnterWorktree` with its `path` (this conversation becomes the parallel session). Not `EnterWorktree` with a `name`: it makes a generated branch, by default off `origin` (which may be behind main or missing), and can't reopen a branch.

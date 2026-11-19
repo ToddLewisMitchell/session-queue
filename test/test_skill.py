@@ -716,7 +716,7 @@ def setup_no_queue(root, fx):
 @scenario("start-new", "Start a queue from scratch, answers in turn 2: queue file written",
           "simple", ["Start a queue for growing calc.py into a small arithmetic module.",
                      "Goal: grow calc.py into a small arithmetic module with tests. Name: calc. "
-                     "Keep the queue folder ignored by git. Branching: work on main. Pace: speed. "
+                     "Keep the queue folder ignored by git. Branching: work on main. Parallels: auto. "
                      "Notifications: off. Checks: `python3 -m unittest -q`, and a low /code-review before each "
                      "commit. Worktree setup: nothing is shared. First session: add subtract(a, b) "
                      "with a test. Anything still unanswered: use your recommendation and write "
@@ -727,7 +727,7 @@ def _(c, ctx):
     if c.check(q, "queues/queue-calc.md written"):
         c.check(re.search(r"\*\*Branching\.\*\* work on main", q), "Branching: work on main")
         c.check(re.search(r"\*\*Notify\.\*\* off", q), "Notify: off")
-        c.check(re.search(r"^\*\*Pace\.\*\* speed\b", q, re.M), "Pace: speed, in the form the status line reads")
+        c.check(re.search(r"^\*\*Parallels\.\*\* auto\b", q, re.M), "Parallels: auto, in the form the status line reads")
         c.check("python3 -m unittest" in q, "Checks hold the test command")
         c.check(re.search(r"ignored by git", q), "records that the folder is ignored")
         c.check("| # | Session | Topic file | Status | Model |" in q, "has the session table")
@@ -1128,7 +1128,7 @@ SHARED = {"frontmatter", "session queue", "files", "principles", "workflows"}
 COVERS = {
     "branching": ["branch-mode", "pause", "resume", "approve", "start-new"],
     "notifications": ["start-new"],
-    "pace": ["start-new", "next", "resume", "skip", "add-running"],
+    "parallels": ["start-new", "next", "resume", "skip", "add-running"],
     "go-ahead, commits, and clear": ["start-new", "next", "approve"],
     "messages between sessions": ["fold-running", "drop-running", "add-running"],
     "start a queue": ["start-new", "start-existing"],
