@@ -1,8 +1,9 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { queueContext } from './context'
 import { guard } from './guard'
 import { openQueues, type Queue } from './queues'
 
-// Three jobs, all read from the open queue files:
+// Four jobs, all read from the open queue files:
 // - Under the prompt: each open queue's Pace, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
@@ -10,6 +11,9 @@ import { openQueues, type Queue } from './queues'
 // - Clear: when the user types `next-session` in a conversation that already
 //   has messages, run `/clear` first and then `next-session` in the fresh
 //   conversation, unless the queue's Clear line is `off`.
+// - Context: attach the queue file and the next row's topic file to
+//   `next-session` (`context.ts`), so the session doesn't spend tool calls
+//   reading them.
 // - The commit guard (`guard.ts`): commits, merges, and pushes ask first, as
 //   the Commits setting says.
 
@@ -48,8 +52,25 @@ async function shouldClear($: EngineInterface, named: string | undefined) {
   return !(await $.agent.list()).some(a => BUSY.has(a.status))
 }
 
+// Set while a clear before `next-session` runs: the queue it names, for the
+// fresh conversation's context blocks. Good for a short window only, so a
+// resubmit that never arrives can't leave it for some later conversation.
+let cleared: { named: string | undefined; at: number } | undefined
+const CLEARED_FOR_MS = 60_000
+
 export const register: Register = on => {
   guard(on)
+
+  // The first message after the clear carries the queue files as a context
+  // block of their own.
+  on('prompt.context', async ($, e, next) => {
+    const done = await next(e)
+    const pending = cleared
+    cleared = undefined
+    if (!pending || (await $.clock.now()) - pending.at > CLEARED_FOR_MS) return done
+    const text = await queueContext($, pending.named).catch(() => undefined)
+    return text === undefined ? done : { ...done, blocks: [...done.blocks, { name: 'sessionQueue', text }] }
+  })
 
   on('session.start', async ($, e, next) => {
     const done = await next(e)
@@ -64,19 +85,33 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    // Only the user's own typing (terminal or phone), between turns.
+    // `next-session` alone, between turns (not a /command, a meta prompt, or a
+    // prompt queued into a running turn).
     const m = NEXT.exec(e.text)
+    if (!m || e.command || e.isMeta || e.turnId !== undefined) return next(e)
+    // Clear first only for the user's own typing (terminal or phone).
     const typed = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
-    if (!m || !typed || e.command || e.isMeta || e.turnId !== undefined) return next(e)
-    if (!(await shouldClear($, m[1]).catch(() => false))) return next(e)
-    const text = e.text.trim()
-    // The clear and the resubmit outlive this dispatch, so they run on a timer.
-    $.clock.after(0, () => {
-      void $.command
-        .run({ command: 'clear' })
-        .catch(() => $.ui.toast('session-queue: couldn’t clear; running next-session here'))
-        .then(() => $.prompt.submit({ text }))
-    })
-    return { drop: `Clearing the conversation, then running ${text}` }
+    if (typed && (await shouldClear($, m[1]).catch(() => false))) {
+      const text = e.text.trim()
+      // The resubmit below doesn't come back through this hook (the engine
+      // skips the hook a call came from, and the timer counts as this one), so
+      // the fresh conversation's context blocks carry the queue files instead.
+      cleared = { named: m[1], at: await $.clock.now() }
+      // The clear and the resubmit outlive this dispatch, so they run on a timer.
+      $.clock.after(0, () => {
+        void $.command
+          .run({ command: 'clear' })
+          .catch(() => {
+            cleared = undefined // no fresh conversation: no context blocks
+            $.ui.toast('session-queue: couldn’t clear; running next-session here')
+          })
+          .then(() => $.prompt.submit({ text }))
+      })
+      return { drop: `Clearing the conversation, then running ${text}` }
+    }
+    // Any other origin gets the queue files attached too: a plugin's or the
+    // SDK's `next-session`.
+    const context = await queueContext($, m[1]).catch(() => undefined)
+    return next(context === undefined ? e : { ...e, context: [...(e.context ?? []), context] })
   })
 }

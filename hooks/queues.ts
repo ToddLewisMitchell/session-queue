@@ -1,8 +1,8 @@
 import type { EngineInterface } from 'claude-code'
 
 // Reads the open queue files (`queues/queue-<name>.md`) and their settings
-// lines. Shared by the status line, the clear before next-session, and the
-// commit guard.
+// lines. Shared by the status line, the clear before next-session, the
+// context attached at next-session, and the commit guard.
 
 const QUEUE = /^queue-(.+)\.md$/
 const PACE = /^\*\*Pace\.\*\*\s*(economy|balanced|speed)\b/m
@@ -15,7 +15,17 @@ const CLEAR = /^\*\*Clear\.\*\*\s*(auto|off)\b/m
 const CLOSED = /^Closed\b[^\n]*\brecord only\b/im
 
 export type Pace = 'economy' | 'balanced' | 'speed'
-export type Queue = { name: string; pace: Pace; autoGoAhead: boolean; autoCommit: boolean; clear: boolean }
+export type Queue = {
+  name: string
+  // The queue folder and the queue file's own text, for the context attached at
+  // next-session (`context.ts`).
+  dir: string
+  text: string
+  pace: Pace
+  autoGoAhead: boolean
+  autoCommit: boolean
+  clear: boolean
+}
 
 // The queue folder sits at the main checkout's root. A session in a git
 // worktree (`.claude/worktrees/...`) doesn't have it when git ignores it, so
@@ -52,6 +62,8 @@ export async function openQueues($: EngineInterface) {
     if (CLOSED.test(text)) continue
     queues.push({
       name: m[1] ?? '',
+      dir,
+      text,
       pace: (PACE.exec(text)?.[1] as Pace) ?? 'balanced',
       autoGoAhead: GO_AHEAD.exec(text)?.[1] === 'auto',
       autoCommit: COMMITS.exec(text)?.[1] === 'auto',
