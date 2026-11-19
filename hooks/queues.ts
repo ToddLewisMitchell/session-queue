@@ -132,7 +132,8 @@ export const isOpen = (r: Row) => !FINISHED.test(r.status)
 
 // The row `next-session` would most likely run: the first TODO or PAUSED row,
 // in table order, that isn't held or folded, isn't `after` a row still open
-// (every row id named in its parentheses counts), and isn't `last` while
+// (every row id named after "after", up to a `;`, the word "before" or the
+// closing parenthesis, counts), and isn't `last` while
 // another row is open. Held and folded rows don't count as open here, since
 // they don't run as they stand. Picking exactly is the skill's judgment
 // (claims, a PAUSED blocker), so this only guesses.
@@ -144,7 +145,7 @@ export function nextRowOf(all: Row[]): Row | undefined {
   const open = new Set(all.filter(r => isOpen(r) && !HELD.test(r.status)).map(r => r.id))
   return all.find(r => {
     if (!RUNNABLE.test(r.status) || HELD.test(r.status)) return false
-    const after = /^TODO\s*\(after\b([^)]*)\)/i.exec(r.status)?.[1]
+    const after = /^TODO\s*\(after\b([^);]*?)(?:\bbefore\b|[;)])/i.exec(r.status)?.[1]
     if (after !== undefined && (after.match(/[\w.-]+/g) ?? []).some(id => id !== r.id && open.has(id))) return false
     if (/^TODO\s*\(last\)/i.test(r.status) && [...open].some(id => id !== r.id)) return false
     return true

@@ -172,3 +172,20 @@ test('nextRow: held rows do not block last; every id after "after" counts', () =
   ])
   expect(nextRow(after)?.id).toBe('5')
 })
+
+test('nextRow: ids after "before" or a ";" in an after status do not block', () => {
+  const t = (rows: string[]) => ['| # | Session | Topic file | Status | Model |', '|---|---|---|---|---|', ...rows].join('\n') + '\n'
+  const q = t([
+    '| R30 | Thirty | `d/30.md` | DONE | opus |',
+    '| R31 | Thirty-one | `d/31.md` | TODO (after R30, before R10, R24 and R15; moved before R10 by the user, 2026-11-19) | opus |',
+    '| R10 | Ten | `d/10.md` | TODO (future version, not soon) | opus |',
+    '| R24 | Twenty-four | `d/24.md` | TODO | opus |',
+  ])
+  expect(nextRow(q)?.id).toBe('R31')
+  const semi = t([
+    '| 1 | One | `d/1.md` | TODO (after 2; 3 is related) | opus |',
+    '| 2 | Two | `d/2.md` | DONE | opus |',
+    '| 3 | Three | `d/3.md` | TODO | opus |',
+  ])
+  expect(nextRow(semi)?.id).toBe('1')
+})
