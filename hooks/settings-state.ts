@@ -11,7 +11,7 @@ import { activeQueues, type Queue } from './queues'
 
 // Change a tag when its value's fields change: a reload keeps what the old
 // code stored, and the tag declines it.
-const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-1' })
+const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-2' })
 const autoCommits = atom({ plugin: 'session-queue', key: 'autoCommits' } as const, [], { shape: 'auto-commits-1' })
 // Enough for a long session's commits; older rows lose their note.
 const AUTO_COMMITS_KEPT = 50
@@ -23,6 +23,7 @@ export const settingsOf = (q: Queue): QueueSettings => ({
   commits: q.autoCommit ? 'auto' : 'approve',
   clear: q.clear ? 'auto' : 'off',
   notify: q.notify ? 'on' : 'off',
+  autoAdvance: q.autoAdvance === undefined ? 'off' : `${q.autoAdvance}%`,
 })
 
 // The settings shown, by the queue line's name, in the template's order.
@@ -31,6 +32,7 @@ export const SHOWN = [
   ['Go-ahead', 'goAhead'],
   ['Commits', 'commits'],
   ['Clear', 'clear'],
+  ['Auto-advance', 'autoAdvance'],
   ['Notify', 'notify'],
 ] as const
 

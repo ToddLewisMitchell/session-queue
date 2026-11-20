@@ -6,9 +6,9 @@ import { isAutoCommit, settingsNow } from './settings-state'
 // The settings shown beside the chat, from the values `refresh` (status.ts)
 // keeps in `$.state`:
 // - In the prompt footer's mode labels (`SessionMode`, terminal and desktop):
-//   each active queue's Parallels setting, plus `auto go-ahead` and
-//   `auto-commit` when those are on, so the user always knows how much runs
-//   without asking them.
+//   each active queue's Parallels setting, plus `auto go-ahead`,
+//   `auto-commit`, and `auto-advance to <P>%` when those are on, so the user
+//   always knows how much runs without asking them.
 // - On the phone, where the footer isn't drawn, the same at the end of the
 //   hint line under the prompt (`PromptHint`).
 // - Under a Bash row that committed or merged because Commits is `auto` (the
@@ -21,6 +21,7 @@ const one = (s: QueueSettings) =>
     `parallels ${s.parallels === 'auto' ? '⚡ auto' : s.parallels}`,
     s.goAhead === 'auto' ? 'auto go-ahead' : '',
     s.commits === 'auto' ? 'auto-commit' : '',
+    s.autoAdvance !== 'off' ? `auto-advance to ${s.autoAdvance}` : '',
   ]
     .filter(Boolean)
     .join(' · ')

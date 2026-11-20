@@ -15,6 +15,8 @@ export type QueueSettings = {
   commits: 'approve' | 'auto'
   clear: 'auto' | 'off'
   notify: 'on' | 'off'
+  // `off`, or the weekly percentage it runs until (`80%`).
+  autoAdvance: string
 }
 
 declare module 'claude-code' {
@@ -23,11 +25,14 @@ declare module 'claude-code' {
     // `settings`: the active queues' settings (settings-state.ts).
     // `autoCommits`: the tool_use_ids of the Bash calls the guard let commit
     // or merge because Commits is `auto`, for the note on their rows.
+    // `doneSeen`: each open queue's DONE row ids when this conversation sent
+    // next-session, for auto-advance (advance.ts); null when it hasn't.
     'session-queue': {
       queues: Shaped<PaneQueue[]>
       approved: Shaped<boolean>
       settings: Shaped<QueueSettings[]>
       autoCommits: Shaped<string[]>
+      doneSeen: Shaped<Record<string, string[]> | null>
     }
   }
 }

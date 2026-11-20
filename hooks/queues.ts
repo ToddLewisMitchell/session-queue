@@ -21,6 +21,19 @@ export function settingValue(text: string, name: string): string | undefined {
   return new RegExp(`^\\*\\*${escaped}\\.\\*\\*[ \\t]*([\\w-]+)`, 'mi').exec(text)?.[1]?.toLowerCase()
 }
 
+// Auto-advance's default weekly percentage, when the line says `on` alone.
+export const DEFAULT_PERCENT = 80
+
+// The weekly percentage the Auto-advance line gives when it's on (advance.ts):
+// the first `<n>%` after `on` on that line, else the default. Undefined when
+// it's off or missing.
+export function advancePercent(text: string): number | undefined {
+  const line = /^\*\*Auto-advance\.\*\*[ \t]*([^\r\n]*)/im.exec(text)?.[1]
+  if (!line || !/^on\b/i.test(line)) return undefined
+  const n = Number(/\b(\d{1,3})\s*%/.exec(line)?.[1] ?? DEFAULT_PERCENT)
+  return Math.min(100, Math.max(1, n))
+}
+
 export type Parallels = 'off' | 'ask' | 'auto'
 export type Queue = {
   name: string
@@ -33,6 +46,8 @@ export type Queue = {
   autoCommit: boolean
   clear: boolean
   notify: boolean
+  // Auto-advance's weekly percentage when it's on (advance.ts).
+  autoAdvance: number | undefined
   // The queue this one waits for (its name), when it has a Waits line.
   waitsFor: string | undefined
 }
@@ -73,6 +88,7 @@ export function parseQueue(name: string, dir: string, text: string): Queue {
     autoCommit: settingValue(text, 'Commits') === 'auto',
     clear: settingValue(text, 'Clear') !== 'off',
     notify: settingValue(text, 'Notify') === 'on',
+    autoAdvance: advancePercent(text),
     waitsFor: WAITS.exec(text)?.[1],
   }
 }
