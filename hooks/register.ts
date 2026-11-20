@@ -1,4 +1,5 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { afterTurn, cancelAdvance, noteNextSession } from './advance'
 import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
 import { display } from './display'
@@ -7,7 +8,7 @@ import { pane, registerPaneCommand } from './pane'
 import { openQueues, pickQueues } from './queues'
 import { refresh } from './status'
 
-// Six jobs, all read from the open queue files. Unnamed, `next-session` and
+// Seven jobs, all read from the open queue files. Unnamed, `next-session` and
 // the commands mean the active queues: those not waiting for another open one
 // (`activeQueues` in queues.ts).
 // - The settings display (`display.tsx`): each active queue's settings in the
@@ -27,6 +28,9 @@ import { refresh } from './status'
 //   `/queue-<setting>` changes one settings line, with no model turn.
 // - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows
 //   and the settings, with a button to change each, redrawn on every refresh.
+// - Auto-advance (`advance.ts`): when a session's row goes DONE and the queue's
+//   Auto-advance line is on, type `next-session` for the user after a
+//   cancellable delay, through the same clear as their own typing.
 
 // `next-session`, optionally followed by a queue name, and nothing else, in
 // any case (`Next-session` too).
@@ -76,6 +80,42 @@ const WATCH_BOX_MS = 30_000
 let cleared: { named: string | undefined; at: number } | undefined
 const CLEARED_FOR_MS = 60_000
 
+
+// Runs `/clear`, then `text` in the fresh conversation, whose context blocks
+// carry the queue files (the `prompt.context` hook below): the resubmit
+// doesn't come back through this plugin's own `prompt.submit` hook (the engine
+// skips the hook a call came from, and the timer counts as this one).
+// `dropped`: the user's typed prompt was dropped, so the engine may hand it
+// back to the box as a draft, to be emptied.
+async function clearThenRun($: EngineInterface, text: string, named: string | undefined, dropped: boolean) {
+  const at = await $.clock.now()
+  cleared = { named, at }
+  if (dropped) watchBox = { text, until: at + WATCH_BOX_MS }
+  // The clear and the resubmit outlive this dispatch, so they run on a timer.
+  $.clock.after(0, () => {
+    void $.command
+      .run({ command: 'clear' })
+      .catch(() => {
+        cleared = undefined // no fresh conversation: no context blocks
+        watchBox = undefined // and no dropped draft to watch for
+        $.ui.toast('session-queue: couldn’t clear; running next-session here')
+      })
+      .then(() => dropped && emptyBox($, text))
+      .then(() => $.prompt.submit({ text }))
+      // Again once it's in, in case the box got the draft back late.
+      .then(() => dropped && emptyBox($, text))
+  })
+}
+
+// Auto-advance's `next-session` (advance.ts), always in a fresh conversation:
+// where the clear would be skipped (a background agent still at work), it
+// stops instead of running the next session on top of this one.
+async function advance($: EngineInterface, text: string) {
+  const named = NEXT.exec(text)?.[1]
+  if (await shouldClear($, named).catch(() => false)) return clearThenRun($, text, named, false)
+  $.ui.toast('session-queue: auto-advance stopped: the conversation can’t be cleared (Clear is off, or a background agent is still running).')
+}
+
 export const register: Register = on => {
   guard(on)
   commands(on)
@@ -89,6 +129,8 @@ export const register: Register = on => {
     const pending = cleared
     cleared = undefined
     if (!pending || (await $.clock.now()) - pending.at > CLEARED_FOR_MS) return done
+    // The fresh conversation runs a queue session: auto-advance's baseline.
+    await noteNextSession($).catch(() => undefined)
     const text = await queueContext($, pending.named).catch(() => undefined)
     return text === undefined ? done : { ...done, blocks: [...done.blocks, { name: 'sessionQueue', text }] }
   })
@@ -115,6 +157,10 @@ export const register: Register = on => {
     await notePrompt($, undefined) // a fresh conversation holds no approval
     const done = await next(e)
     await refresh($).catch(() => undefined)
+    // A fresh conversation (a new session, or after a clear) runs no queue
+    // session yet; a reload mid-conversation keeps auto-advance's baseline.
+    const last = await $.session.messages({ last: 1 }).catch(() => [])
+    if (!('deny' in last) && last.length === 0) await noteNextSession($, null).catch(() => undefined)
     // On an engine without the command API, the session still starts.
     await registerCommands($).catch(() => undefined)
     await registerPaneCommand($).catch(() => undefined)
@@ -123,44 +169,45 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId === undefined) await refresh($).catch(() => undefined)
+    if (e.agentId !== undefined) return done
+    await refresh($).catch(() => undefined)
+    // Only a turn that ended with an answer: an interrupt, a refusal, or an
+    // error is the user's to look at.
+    if (e.reason === 'answer') await afterTurn($, text => advance($, text)).catch(() => undefined)
     return done
+  })
+
+  // The user typing in the box cancels a pending auto-advance.
+  // A bare cursor move doesn't count.
+  on('prompt.edit', async ($, e, next) => {
+    if (e.inputText !== '' || e.start !== e.end) cancelAdvance($, 'you typed in the prompt box')
+    return next(e)
   })
 
   on('prompt.submit', async ($, e, next) => {
     await notePrompt($, e)
+    // A prompt the user sends cancels a pending auto-advance (this plugin's
+    // own resubmit doesn't come through here).
+    if (e.origin.kind !== 'plugin') cancelAdvance($, 'a prompt was sent')
     // `next-session` alone, between turns (not a /command, a meta prompt, or a
     // prompt queued into a running turn).
     const m = NEXT.exec(e.text)
     if (!m || e.command || e.isMeta || e.turnId !== undefined) return next(e)
-    // Clear first only for the user's own typing (terminal or phone).
+    // Clear first only for the user's own typing (terminal or phone);
+    // auto-advance clears for itself (`advance`).
     const typed = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
     if (typed && (await shouldClear($, m[1]).catch(() => false))) {
       const text = e.text.trim()
-      // The resubmit below doesn't come back through this hook (the engine
-      // skips the hook a call came from, and the timer counts as this one), so
-      // the fresh conversation's context blocks carry the queue files instead.
-      const at = await $.clock.now()
-      cleared = { named: m[1], at }
-      watchBox = { text, until: at + WATCH_BOX_MS }
-      // The clear and the resubmit outlive this dispatch, so they run on a timer.
-      $.clock.after(0, () => {
-        void $.command
-          .run({ command: 'clear' })
-          .catch(() => {
-            cleared = undefined // no fresh conversation: no context blocks
-            watchBox = undefined // and no dropped draft to watch for
-            $.ui.toast('session-queue: couldn’t clear; running next-session here')
-          })
-          .then(() => emptyBox($, text))
-          .then(() => $.prompt.submit({ text }))
-          // Again once it's in, in case the box got the draft back late.
-          .then(() => emptyBox($, text))
-      })
+      await clearThenRun($, text, m[1], true)
       return { drop: `Clearing the conversation, then running ${text}` }
     }
-    // Any other origin gets the queue files attached too: a plugin's or the
-    // SDK's `next-session`.
+    // Run here, not cleared: auto-advance's baseline.
+    await noteNextSession($).catch(() => undefined)
+    // This plugin's own resubmit after a clear, should the engine pass it
+    // through here: the `prompt.context` block carries the files.
+    if (e.origin.kind === 'plugin' && e.origin.name === 'session-queue') return next(e)
+    // Any other origin gets the queue files attached too: another plugin's or
+    // the SDK's `next-session`.
     const context = await queueContext($, m[1]).catch(() => undefined)
     return next(context === undefined ? e : { ...e, context: [...(e.context ?? []), context] })
   })

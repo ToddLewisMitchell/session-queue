@@ -137,6 +137,7 @@ test('the pane shows a button per setting; a press moves it on and writes the li
     'Go-ahead: ask',
     'Commits: auto',
     'Clear: auto',
+    'Auto-advance: off',
     'Notify: off',
   ])
   await ui.press({ key: 'demo/Parallels' })

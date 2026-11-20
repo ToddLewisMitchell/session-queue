@@ -58,13 +58,13 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-autocommit', 'queue-autoclear', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-autocommit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo: parallels off · go-ahead ask · commits approve · clear auto · notify off')
+  expect(text).toContain('Queue demo: parallels off · go-ahead ask · commits approve · clear auto · auto-advance off · notify off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')

@@ -1,6 +1,20 @@
 import type { EngineInterface, On } from 'claude-code'
 import { refresh } from './status'
-import { activeQueues, isOpen, isWaiting, nextRow, waitedFor, openQueues, parseQueue, pickQueues, rows, settingValue, type Queue } from './queues'
+import {
+  activeQueues,
+  advancePercent,
+  DEFAULT_PERCENT,
+  isOpen,
+  isWaiting,
+  nextRow,
+  waitedFor,
+  openQueues,
+  parseQueue,
+  pickQueues,
+  rows,
+  settingValue,
+  type Queue,
+} from './queues'
 
 // Slash commands that read or change the queue file with no model turn:
 // - `/queue [name]`: the open rows, what `next-session` runs next, and the
@@ -22,6 +36,11 @@ export type Setting = {
   values: Record<string, string>
   // The line's older name, replaced by a change when the new one is missing.
   legacy?: string
+  // Auto-advance only: a percentage (`80` or `80%`) also means `on`, until
+  // that share of the weekly usage limit.
+  percent?: true
+  // Settings a change to `on` turns on too (Auto-advance needs all three).
+  turnsOn?: readonly (readonly [name: string, value: string])[]
 }
 
 const GACC = 'Go-ahead, Commits, and Clear'
@@ -56,6 +75,20 @@ export const SETTINGS: readonly Setting[] = [
     values: { auto: 'clear the conversation when I type next-session', off: '' },
   },
   {
+    command: 'queue-autoadvance',
+    description:
+      'Choose whether the queue runs its next session by itself when one finishes: off, or on until a share of your weekly usage limit (80% unless you give one, e.g. 70%); on also turns on auto go-ahead, auto-commit, and auto-clear',
+    name: 'Auto-advance',
+    section: GACC,
+    values: { off: '', on: '' },
+    percent: true,
+    turnsOn: [
+      ['Go-ahead', 'auto'],
+      ['Commits', 'auto'],
+      ['Clear', 'auto'],
+    ],
+  },
+  {
     command: 'queue-notify',
     description: 'Choose whether a session sends a push notification when it needs you: on or off',
     name: 'Notify',
@@ -66,7 +99,7 @@ export const SETTINGS: readonly Setting[] = [
 
 // The settings lines in the template's order, for placing a missing one. `Pace`
 // is the older name of the Parallels line, still found in older queues.
-const ORDER = ['Branching', 'Parallels', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Notify']
+const ORDER = ['Branching', 'Parallels', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Auto-advance', 'Notify']
 
 // `[^\\r\\n]*` rather than `.*`, so a Windows line ending stays.
 const lineOf = (name: string) => new RegExp(`^\\*\\*${name}\\.\\*\\*[^\\r\\n]*`, 'mi')
@@ -81,8 +114,7 @@ function today(ms: number) {
 // The queue text with `s` set to `value`: its line replaced, or a new one put
 // after the closest earlier settings line (else before the closest later one,
 // else before the first `##` heading, else at the end).
-export function setLine(text: string, s: Setting, value: string, date: string) {
-  const why = s.values[value]
+export function setLine(text: string, s: Setting, value: string, date: string, why = s.values[value]) {
   const old = lineOf(s.name).exec(text) ?? (s.legacy ? lineOf(s.legacy).exec(text) : null)
   // The old line's notes after `(chosen <date>;`, kept (an older name's section
   // renamed); else the template's.
@@ -109,15 +141,35 @@ export function setLine(text: string, s: Setting, value: string, date: string) {
 // Sets one settings line of queue `q`'s file, re-read just before writing so
 // an edit since the read isn't lost. `value` may be worked out from that text
 // (the pane's buttons step on from the current value). Used by the commands
-// and the queue pane's settings buttons (pane.tsx). Returns the value written,
-// or why it couldn't.
-export async function writeSetting($: EngineInterface, q: Queue, s: Setting, value: string | ((current: Queue) => string)) {
+// and the queue pane's settings buttons (pane.tsx). Auto-advance `on` keeps
+// the percentage given, else the line's own, else the default, and turns on
+// the settings it needs in the same write (`also`, the ones it changed).
+// Returns the value written, or why it couldn't.
+export async function writeSetting(
+  $: EngineInterface,
+  q: Queue,
+  s: Setting,
+  value: string | ((current: Queue) => string),
+  percent?: number,
+) {
   const path = `${q.dir}/queue-${q.name}.md`
   try {
     const current = await $.fs.read(path)
     const v = typeof value === 'string' ? value : value(parseQueue(q.name, q.dir, current))
-    await $.fs.write(path, setLine(current, s, v, today(await $.clock.now())))
-    return { value: v }
+    const date = today(await $.clock.now())
+    const on = s.percent && v === 'on'
+    const why = on ? `until ${percent ?? advancePercent(current) ?? DEFAULT_PERCENT}% of the weekly usage limit` : undefined
+    let text = setLine(current, s, v, date, why)
+    const also: string[] = []
+    if (on)
+      for (const [name, value] of s.turnsOn ?? []) {
+        const t = SETTINGS.find(x => x.name === name)
+        if (!t || settingValue(text, name) === value) continue
+        text = setLine(text, t, value, date)
+        also.push(name)
+      }
+    await $.fs.write(path, text)
+    return { value: v, also }
   } catch {
     return { failed: `Couldn't update ${path}; nothing was changed.` }
   }
@@ -131,6 +183,10 @@ export function keptBy(queues: Queue[], s: Setting, value: string) {
   if (waiting.length === 0) return ''
   return `Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
 }
+
+// `a`, `a and b`, `a, b, and c`.
+export const list = (xs: readonly string[]) =>
+  xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')}, and ${xs.at(-1)}`
 
 // The one queue a command acts on, or the reason there isn't one.
 function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
@@ -148,6 +204,7 @@ const settingsSummary = (q: Queue) =>
     `go-ahead ${q.autoGoAhead ? 'auto' : 'ask'}`,
     `commits ${q.autoCommit ? 'auto' : 'approve'}`,
     `clear ${q.clear ? 'auto' : 'off'}`,
+    `auto-advance ${q.autoAdvance === undefined ? 'off' : `until ${q.autoAdvance}% weekly`}`,
     `notify ${q.notify ? 'on' : 'off'}`,
   ].join(' · ')
 
@@ -174,7 +231,7 @@ export async function registerCommands($: EngineInterface) {
       .register({
         name: s.command,
         description: s.description,
-        argumentHint: `<${Object.keys(s.values).join('|')}> [queue]`,
+        argumentHint: `<${Object.keys(s.values).join('|')}${s.percent ? '|<n>%' : ''}> [queue]`,
       })
       .catch(() => undefined)
   }
@@ -198,27 +255,35 @@ export function commands(on: On) {
 
   for (const s of SETTINGS) {
     on('command.run', { command: s.command }, async ($, e) => {
-      const usage = `Usage: /${s.command} <${Object.keys(s.values).join('|')}> [queue]`
+      const usage = `Usage: /${s.command} <${Object.keys(s.values).join('|')}${s.percent ? '|<n>%' : ''}> [queue]`
       const words = e.args.trim().split(/\s+/).filter(Boolean)
-      // Own keys only: `in` would also take `constructor` and the like.
-      const at = words.findIndex(w => Object.hasOwn(s.values, w.toLowerCase()))
-      const value = words[at]?.toLowerCase()
-      // Only that one word is the value, so a queue named `auto` still works.
-      const rest = words.filter((_, i) => i !== at)
+      // Own keys only: `in` would also take `constructor` and the like. A
+      // percentage, where the setting takes one, means `on` until it.
+      const isPercent = (w: string) => s.percent === true && /^\d{1,3}%?$/.test(w) && Number(w.replace('%', '')) >= 1 && Number(w.replace('%', '')) <= 100
+      const pc = words.findIndex(isPercent)
+      const percent = pc >= 0 ? Number(words[pc]!.replace('%', '')) : undefined
+      // With a percentage, an `on` beside it is the same value (`on 70%`).
+      const at = words.findIndex((w, i) => i !== pc && Object.hasOwn(s.values, w.toLowerCase()) && (pc < 0 || w.toLowerCase() === 'on'))
+      const value = percent !== undefined ? 'on' : words[at]?.toLowerCase()
+      // Only those words are the value, so a queue named `auto` still works.
+      const rest = words.filter((_, i) => i !== at && i !== pc)
       if (value === undefined || rest.length > 1) return { text: usage }
       const queues = await openQueues($)
       const q = oneQueue(queues, rest[0])
       if (typeof q === 'string') return { text: q }
-      if (settingValue(q.text, s.name) === value)
-        return { text: `Queue ${q.name}: ${s.name} is already ${value}.` }
-      const written = await writeSetting($, q, s, value)
+      const same = settingValue(q.text, s.name) === value && (percent === undefined || percent === q.autoAdvance)
+      const needs = value === 'on' ? (s.turnsOn ?? []).filter(([n, v]) => settingValue(q.text, n) !== v) : []
+      if (same && needs.length === 0) return { text: `Queue ${q.name}: ${s.name} is already ${value}.` }
+      const written = await writeSetting($, q, s, value, percent)
       if ('failed' in written) return { text: written.failed }
+      const until = s.percent && value === 'on' ? ` until ${percent ?? q.autoAdvance ?? DEFAULT_PERCENT}% of the weekly usage limit` : ''
+      const also = written.also.length > 0 ? ` Also set ${list(written.also)} to auto.` : ''
       // Quiet: this reply reports the change, so no toast repeats it.
       await refresh($, { quiet: true }).catch(() => undefined)
       // Unnamed, only the active queue changed: say which waiting ones didn't,
       // so a queue that copied these settings isn't left behind unseen.
       const kept = rest.length === 0 ? keptBy(queues, s, value) : ''
-      return { text: `Queue ${q.name}: ${s.name} set to ${value}.${kept ? ` ${kept}` : ''}` }
+      return { text: `Queue ${q.name}: ${s.name} set to ${value}${until}.${also}${kept ? ` ${kept}` : ''}` }
     })
   }
 }
