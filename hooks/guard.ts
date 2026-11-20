@@ -1,5 +1,5 @@
 import type { EngineInterface, On } from 'claude-code'
-import { openQueues } from './queues'
+import { activeQueues, openQueues } from './queues'
 
 // The commit guard: SKILL.md Principle 2 and the Commits setting, enforced
 // on the model's Bash calls while a queue is open.
@@ -286,7 +286,9 @@ export function guard(on: On) {
       return { decision: 'ask', reason: `${NAME}: pushing always needs your approval.` }
     if (actions.has('unreadable'))
       return { decision: 'ask', reason: `${NAME}: couldn't read this command to see whether it commits or pushes. Allow it?` }
-    if ((actions.has('commit') || actions.has('merge')) && queues.some(q => !q.autoCommit)) {
+    if ((actions.has('commit') || actions.has('merge')) && activeQueues(queues).some(q => !q.autoCommit)) {
+      // A waiting queue runs no sessions yet, so its setting doesn't count (as
+      // under the prompt).
       const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
       return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is approve. Allow this ${what}?` }
     }

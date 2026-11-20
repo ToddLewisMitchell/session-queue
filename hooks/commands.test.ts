@@ -1,12 +1,13 @@
 import { expect, mock, test } from 'claude-code/testing'
 import { SETTINGS, setLine } from './commands'
-import { nextRow } from './queues'
+import { nextRow, parseQueue } from './queues'
 
 // A fake queues/ folder the commands read and write, and the status lines and
 // commands the plugin registers.
 function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: boolean } = {}) {
   const shown: (string | undefined)[] = []
   const registered: string[] = []
+  const described: Record<string, string> = {}
   const clock = mock.clock(on)
   on('fs.list', () => ({
     value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })),
@@ -18,9 +19,13 @@ function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: 
     return { value: undefined }
   })
   on('ui.status', (_: unknown, e: { text?: string }) => (shown.push(e.text), { value: undefined }))
-  on('command.register', (_: unknown, e: { name: string }) => (registered.push(e.name), { value: { command: e.name } }))
+  on('command.register', (_: unknown, e: { name: string; description: string }) => {
+    registered.push(e.name)
+    described[e.name] = e.description
+    return { value: { command: e.name } }
+  })
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
-  return { shown, registered, clock }
+  return { shown, registered, described, clock }
 }
 
 const run = ($: any, command: string, args = '') => $.command.run({ command, args })
@@ -53,7 +58,7 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-commits', 'queue-clear', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-autocommit', 'queue-autoclear', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
@@ -105,19 +110,19 @@ test('a missing line goes where the template puts it', async ($, on) => {
 test('a bad value, an extra word, or an unnamed second queue writes nothing', async ($, on) => {
   const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-b.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-clear', 'maybe a')).text).toBe('Usage: /queue-clear <auto|off> [queue]')
-  expect((await run($, 'queue-clear', 'off a b')).text).toBe('Usage: /queue-clear <auto|off> [queue]')
-  expect((await run($, 'queue-clear', 'off')).text).toBe('Two or more queues are open; name one: a, b.')
+  expect((await run($, 'queue-autoclear', 'maybe a')).text).toBe('Usage: /queue-autoclear <auto|off> [queue]')
+  expect((await run($, 'queue-autoclear', 'off a b')).text).toBe('Usage: /queue-autoclear <auto|off> [queue]')
+  expect((await run($, 'queue-autoclear', 'off')).text).toBe('Two or more queues are active; name one: a, b.')
   expect(files['queue-a.md']).toBe(QUEUE)
   expect(files['queue-b.md']).toBe(QUEUE)
-  expect((await run($, 'queue-clear', 'B off')).text).toBe('Queue b: Clear set to off.')
+  expect((await run($, 'queue-autoclear', 'B off')).text).toBe('Queue b: Clear set to off.')
   expect(files['queue-a.md']).toBe(QUEUE)
 })
 
 test('the same value again changes nothing', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-commits', 'approve')).text).toBe('Queue demo: Commits is already approve.')
+  expect((await run($, 'queue-autocommit', 'approve')).text).toBe('Queue demo: Commits is already approve.')
   expect(files['queue-demo.md']).toBe(QUEUE)
 })
 
@@ -145,7 +150,7 @@ test('an inherited key is not a value', async ($, on) => {
 test('a queue named like a value is still named', async ($, on) => {
   const files: Record<string, string> = { 'queue-auto.md': QUEUE, 'queue-b.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-clear', 'auto auto')).text).toBe('Queue auto: Clear set to auto.')
+  expect((await run($, 'queue-autoclear', 'auto auto')).text).toBe('Queue auto: Clear set to auto.')
   expect(files['queue-b.md']).toBe(QUEUE)
 })
 
@@ -188,4 +193,52 @@ test('nextRow: ids after "before" or a ";" in an after status do not block', () 
     '| 3 | Three | `d/3.md` | TODO | opus |',
   ])
   expect(nextRow(semi)?.id).toBe('1')
+})
+
+// --- A queue that waits for another ----------------------------------------
+
+const WAITING = QUEUE.replace('# Demo queue\n', '# Later queue\n\nWaits for `queue-a.md`: starts when it closes.\n')
+
+test('a waiting queue is not active: commands unnamed act on the active one', async ($, on) => {
+  const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-later.md': WAITING }
+  fakeFolder(on, files)
+  expect((await run($, 'queue-autoclear', 'off')).text).toBe(
+    'Queue a: Clear set to off. Waiting queue later kept Clear as it was; add the name to change it too.',
+  )
+  expect(files['queue-later.md']).toBe(WAITING)
+  // Named, the waiting queue still changes.
+  expect((await run($, 'queue-autocommit', 'auto later')).text).toBe('Queue later: Commits set to auto.')
+})
+
+test('/queue shows the waiting queue after the active one, without a next row', async ($, on) => {
+  fakeFolder(on, { 'queue-later.md': WAITING, 'queue-a.md': QUEUE })
+  const text = (await run($, 'queue')).text
+  expect(text.indexOf('Queue a:') < text.indexOf('Queue later:')).toBe(true)
+  expect(text).toContain('Waits for queue a: next-session runs it once that queue closes')
+  expect(text.match(/next-session runs 4/g)?.length).toBe(1)
+})
+
+test('a queue whose predecessor closed, or that waits in a loop, is active', async ($, on) => {
+  const closed = 'Closed 2026-11-19, a record only.\n' + QUEUE
+  const loop = QUEUE.replace('# Demo queue\n', '# A\n\nWaits for `queue-later.md`.\n')
+  const files: Record<string, string> = { 'queue-a.md': closed, 'queue-later.md': WAITING }
+  fakeFolder(on, files)
+  expect((await run($, 'queue-notify', 'on')).text).toBe('Queue later: Notify set to on.')
+  files['queue-a.md'] = loop
+  expect((await run($, 'queue-notify', 'on')).text).toBe('Two or more queues are active; name one: a, later.')
+  // A third queue outside the loop doesn't hide it.
+  files['queue-c.md'] = QUEUE
+  expect((await run($, 'queue-notify', 'off')).text).toBe('Two or more queues are active; name one: a, later, c.')
+})
+
+test('a Waits line in bold or a quote still counts', () => {
+  for (const line of ['**Waits for** `queue-a.md`: starts when it closes.', '> Waits for queue-a.md.', 'Waits for `queue-v1.2.md`.'])
+    expect(parseQueue('later', 'queues', `# Later\n\n${line}\n`).waitsFor).toBe(line.includes('v1.2') ? 'v1.2' : 'a')
+})
+
+test('the commands describe what they choose', async ($, on) => {
+  const { described } = fakeFolder(on, { 'queue-demo.md': QUEUE })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (const s of SETTINGS) expect(described[s.command]).not.toContain('line')
+  expect(described['queue-autocommit']).toContain('commits on its own')
 })

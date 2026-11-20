@@ -2,6 +2,8 @@
 
 <Successor to `queue-<previous>.md` (closed <date>, a record only).> `next-session` runs from this file.
 
+<Waits for queue-<other>.md: starts when it closes.>
+
 **Goal.** <One sentence.>
 
 **How the queue runs.** With the `session-queue` skill (workflows, principles, parallel sessions). Only this project's specifics are below. The queue folder is <committed | ignored by git: never stage it>.

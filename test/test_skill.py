@@ -614,6 +614,23 @@ def _(c, ctx):
           "instead of picking one?", "asks which queue")
 
 
+def setup_waiting_queue(root, fx):
+    setup_two_queues(root, fx)
+    p = root / "queues/queue-docs.md"
+    p.write_text(p.read_text().replace(
+        "`next-session` runs from this file.\n",
+        "`next-session` runs from this file.\n\nWaits for queue-demo.md: starts when it closes.\n", 1))
+
+
+@scenario("two-waits", "Docs queue waits for Demo: bare next-session runs Demo without asking",
+          "simple", ["next-session"], setup=setup_waiting_queue)
+def _(c, ctx):
+    c.check(status(ctx.root, "1").startswith("IN PROGRESS"), "Demo row 1 claimed")
+    c.check(status(ctx.root, "1", "queue-docs.md") == "TODO", "Docs row 1 untouched")
+    judge(c, ctx.out, "Does the reply present the scope of the Demo queue's next session, without "
+          "asking the user which queue to run?", "runs the active queue without asking")
+
+
 @scenario("two-named", "next-session docs runs the docs queue only", "simple",
           ["next-session docs", GO], setup=setup_two_queues)
 def _(c, ctx):
@@ -634,8 +651,9 @@ def _(c, ctx):
     files = sorted(p.name for p in (ctx.root / "queues").glob("queue-*.md"))
     c.check(files == ["queue-demo.md"], f"no new queue file yet ({files})")
     judge(c, ctx.out, "Does the reply name the existing open queue (Demo) and ask whether to add to "
-          "it, close it and roll over, or start a second queue alongside, with a recommendation?",
-          "names the open queue and offers the three choices")
+          "it, close it and roll over, start a queue that runs after it, or start a second queue "
+          "alongside, with a recommendation?",
+          "names the open queue and offers the four choices")
 
 
 # ---- simple fixture: multi-turn --------------------------------------------
@@ -1134,7 +1152,7 @@ COVERS = {
     "start a queue": ["start-new", "start-existing"],
     "add a task": ["add", "add-list", "drop", "fold-todo", "fold-running", "add-running", "insert",
                    "reorder", "drop-folded", "drop-running"],
-    "next-session": ["next", "discussion", "claimed", "model-switch", "baseline", "two-ask",
+    "next-session": ["next", "discussion", "claimed", "model-switch", "baseline", "two-ask", "two-waits",
                      "two-named", "approve", "branch-mode", "discuss-decide", "pause",
                      "resume", "blocker", "skip", "only-unplaced", "parallel-resume",
                      "parallel-reuse", "parallel-new"],

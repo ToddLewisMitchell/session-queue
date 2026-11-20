@@ -1,8 +1,8 @@
 import type { EngineInterface } from 'claude-code'
 import { setPaneQueues } from './pane-state'
-import { openQueues, type Queue } from './queues'
+import { activeQueues, openQueues, type Queue } from './queues'
 
-// The line under the prompt: each open queue's Parallels setting, plus `auto go-ahead` and
+// The line under the prompt: each active queue's Parallels setting, plus `auto go-ahead` and
 // `auto-commit` when those settings are on, and the queue pane's rows
 // (pane-state.ts). Refreshed by register.ts (session start, after each turn) and by
 // the commands (commands.ts, pane.tsx).
@@ -15,7 +15,8 @@ const label = (q: Queue) =>
   ].filter(Boolean)
 
 export async function refresh($: EngineInterface) {
-  const queues = await openQueues($)
+  // A queue waiting for another doesn't run yet, so it isn't shown.
+  const queues = activeQueues(await openQueues($))
   await setPaneQueues($, queues).catch(() => undefined)
   if (queues.length === 0) return $.ui.status(undefined)
   const labels = queues.map(q => label(q))

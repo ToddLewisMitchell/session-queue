@@ -1,6 +1,6 @@
 import type { EngineInterface, On } from 'claude-code'
 import { refresh } from './status'
-import { isOpen, nextRow, openQueues, pickQueues, rows, settingValue, type Queue } from './queues'
+import { activeQueues, isOpen, isWaiting, nextRow, waitedFor, openQueues, pickQueues, rows, settingValue, type Queue } from './queues'
 
 // Slash commands that read or change the queue file with no model turn:
 // - `/queue [name]`: the open rows, what `next-session` runs next, and the
@@ -9,11 +9,13 @@ import { isOpen, nextRow, openQueues, pickQueues, rows, settingValue, type Queue
 //   template's form with today's date, keeping the old line's own notes after
 //   `(chosen <date>;` (a targeted line replacement, Principle 6). A missing
 //   line is added where the template puts it.
-// The queue name is needed only with two open queues; it and the value may
-// come in either order, in any case.
+// The queue name is needed only with two active queues (a queue waiting for
+// another isn't active); it and the value may come in either order, in any case.
 
 type Setting = {
   command: string
+  // What the command does, in the user's terms, for the command list.
+  description: string
   name: string
   section: string
   // Each value, with the template's explanation where it has one.
@@ -24,27 +26,38 @@ type Setting = {
 
 const GACC = 'Go-ahead, Commits, and Clear'
 export const SETTINGS: readonly Setting[] = [
-  { command: 'queue-parallels', name: 'Parallels', section: 'Parallels', values: { off: '', ask: '', auto: '' }, legacy: 'Pace' },
+  {
+    command: 'queue-parallels',
+    description: 'Choose how many queue sessions run at once: off (one at a time), ask (offer parallel ones), or auto (start every one that can)',
+    name: 'Parallels',
+    section: 'Parallels',
+    values: { off: '', ask: '', auto: '' },
+    legacy: 'Pace',
+  },
   {
     command: 'queue-go-ahead',
+    description: "Choose whether a session waits for your go-ahead before building: ask, or auto (go on when there's nothing to decide)",
     name: 'Go-ahead',
     section: GACC,
     values: { ask: '', auto: "start building without waiting when there's nothing to decide" },
   },
   {
-    command: 'queue-commits',
+    command: 'queue-autocommit',
+    description: 'Choose whether a session commits on its own: approve (wait for your approval), or auto (commit when the checks and review pass)',
     name: 'Commits',
     section: GACC,
     values: { approve: '', auto: 'commit and merge without waiting when the Checks and review pass' },
   },
   {
-    command: 'queue-clear',
+    command: 'queue-autoclear',
+    description: 'Choose whether next-session clears the conversation first: auto (clear it), or off (keep it)',
     name: 'Clear',
     section: GACC,
     values: { auto: 'clear the conversation when I type next-session', off: '' },
   },
   {
     command: 'queue-notify',
+    description: 'Choose whether a session sends a push notification when it needs you: on or off',
     name: 'Notify',
     section: 'Notifications',
     values: { off: '', on: 'push a notification when a session stops for my decision or approval' },
@@ -100,7 +113,7 @@ function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
   if (queues.length === 0) return 'No open queue (queues/queue-<name>.md).'
   if (named !== undefined && picked.length > 1) return `More than one queue is named ${named}: ${picked.map(q => q.name).join(', ')}.`
   if (named !== undefined) return `No open queue named ${named}. Open: ${queues.map(q => q.name).join(', ')}.`
-  return `Two or more queues are open; name one: ${queues.map(q => q.name).join(', ')}.`
+  return `Two or more queues are active; name one: ${picked.map(q => q.name).join(', ')}.`
 }
 
 const settingsSummary = (q: Queue) =>
@@ -112,12 +125,13 @@ const settingsSummary = (q: Queue) =>
     `notify ${q.notify ? 'on' : 'off'}`,
   ].join(' · ')
 
-// The `/queue` view of one queue.
-export function view(q: Queue) {
+// The `/queue` view of one queue; `waitsFor`, the open queue it waits for.
+export function view(q: Queue, waitsFor?: Queue) {
   const open = rows(q.text).filter(isOpen)
   const next = nextRow(q.text)
   const lines = [`Queue ${q.name}: ${settingsSummary(q)}`]
-  lines.push(next ? `next-session runs ${next.id} (${next.session}) on ${next.model || 'the current model'}` : 'next-session: no runnable row')
+  if (waitsFor) lines.push(`Waits for queue ${waitsFor.name}: next-session runs it once that queue closes`)
+  else lines.push(next ? `next-session runs ${next.id} (${next.session}) on ${next.model || 'the current model'}` : 'next-session: no runnable row')
   if (open.length === 0) lines.push('No open rows.')
   else for (const r of open) lines.push(`  ${r.id}  ${r.session}: ${r.status}`)
   return lines.join('\n')
@@ -133,7 +147,7 @@ export async function registerCommands($: EngineInterface) {
     await $.command
       .register({
         name: s.command,
-        description: `Set the queue's ${s.name} line`,
+        description: s.description,
         argumentHint: `<${Object.keys(s.values).join('|')}> [queue]`,
       })
       .catch(() => undefined)
@@ -146,12 +160,14 @@ export function commands(on: On) {
   on('command.run', { command: 'queue' }, async ($, e) => {
     const queues = await openQueues($)
     const named = e.args.trim() || undefined
-    const picked = pickQueues(queues, named)
+    // Unnamed, every open queue: the active ones first, then any waiting ones.
+    const active = activeQueues(queues)
+    const picked = named === undefined ? [...active, ...queues.filter(q => !active.includes(q))] : pickQueues(queues, named)
     if (picked.length === 0) {
       const r = oneQueue(queues, named)
       return { text: typeof r === 'string' ? r : view(r) }
     }
-    return { text: picked.map(view).join('\n\n') }
+    return { text: picked.map(q => view(q, active.includes(q) ? undefined : waitedFor(q, queues))).join('\n\n') }
   })
 
   for (const s of SETTINGS) {
@@ -164,7 +180,8 @@ export function commands(on: On) {
       // Only that one word is the value, so a queue named `auto` still works.
       const rest = words.filter((_, i) => i !== at)
       if (value === undefined || rest.length > 1) return { text: usage }
-      const q = oneQueue(await openQueues($), rest[0])
+      const queues = await openQueues($)
+      const q = oneQueue(queues, rest[0])
       if (typeof q === 'string') return { text: q }
       if (settingValue(q.text, s.name) === value)
         return { text: `Queue ${q.name}: ${s.name} is already ${value}.` }
@@ -177,7 +194,11 @@ export function commands(on: On) {
         return { text: `Couldn't update ${path}; nothing was changed.` }
       }
       await refresh($).catch(() => undefined)
-      return { text: `Queue ${q.name}: ${s.name} set to ${value}.` }
+      // Unnamed, only the active queue changed: say which waiting ones didn't,
+      // so a queue that copied these settings isn't left behind unseen.
+      const waiting = rest.length === 0 ? queues.filter(o => isWaiting(o, queues) && settingValue(o.text, s.name) !== value) : []
+      const kept = waiting.length === 0 ? '' : ` Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
+      return { text: `Queue ${q.name}: ${s.name} set to ${value}.${kept}` }
     })
   }
 }

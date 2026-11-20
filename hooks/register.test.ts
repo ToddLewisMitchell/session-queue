@@ -204,6 +204,27 @@ test('two queues unnamed attach only the queue files', async ($, on) => {
   expect(text).not.toContain('NEXT TOPIC')
 })
 
+test('a queue waiting for another: next-session runs the active one', async ($, on) => {
+  const row = TABLE(['| 1 | Next | `d/next.md` | TODO | opus |'])
+  const later = 'Waits for `queue-a.md`: starts when it closes.\n' + TABLE(['| 1 | Later | `d/later.md` | TODO | opus |'])
+  const { clock, context } = fakeSession(on, { 'queue-a.md': row, 'queue-b.md': later, 'next.md': 'NEXT TOPIC', 'later.md': 'LATER TOPIC' }, { messages: 0 })
+  await typed($, 'next-session')
+  await clock.settle()
+  const text = context[0]?.join('\n') ?? ''
+  expect(text).toContain('queues/queue-a.md')
+  expect(text).not.toContain('queues/queue-b.md')
+  expect(text).toContain('NEXT TOPIC')
+})
+
+test('a waiting queue is not under the prompt', async ($, on) => {
+  const shown = fakeQueues(on, {
+    'queue-a.md': '**Pace.** balanced\n',
+    'queue-b.md': 'Waits for `queue-a.md`.\n\n**Pace.** speed\n',
+  })
+  await start($)
+  expect(shown.at(-1)).toBe('parallels: ask')
+})
+
 test('a topic path outside the queue folder is not read', async ($, on) => {
   const queue = TABLE(['| 1 | Escape | `../secret.md` | TODO | opus |'])
   const { clock, context } = fakeSession(on, { 'queue-demo.md': queue, 'secret.md': 'SECRET' }, { messages: 0 })

@@ -10,6 +10,10 @@ const QUEUE = /^queue-(.+)\.md$/
 // title. Anchoring to the line start skips a successor's "Successor to ...
 // (closed ..., a record only)" and any row or note that mentions both words.
 const CLOSED = /^Closed\b[^\n]*\brecord only\b/im
+// A queue that runs after another has a line starting "Waits for
+// `queue-<name>.md`" under its title (markup such as `**` or `> ` allowed). It
+// isn't active while that queue is open.
+const WAITS = /^[>*_\s]*Waits for[*_]*\s+`?queue-([^`\s]+?)\.md\b/im
 
 // A settings line's value: the first word after `**<Name>.**`, lowercased.
 export function settingValue(text: string, name: string): string | undefined {
@@ -29,6 +33,8 @@ export type Queue = {
   autoCommit: boolean
   clear: boolean
   notify: boolean
+  // The queue this one waits for (its name), when it has a Waits line.
+  waitsFor: string | undefined
 }
 
 const PARALLELS: readonly string[] = ['off', 'ask', 'auto']
@@ -67,6 +73,7 @@ export function parseQueue(name: string, dir: string, text: string): Queue {
     autoCommit: settingValue(text, 'Commits') === 'auto',
     clear: settingValue(text, 'Clear') !== 'off',
     notify: settingValue(text, 'Notify') === 'on',
+    waitsFor: WAITS.exec(text)?.[1],
   }
 }
 
@@ -90,10 +97,31 @@ export async function openQueues($: EngineInterface) {
   return queues
 }
 
+const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+// The open queue `q` waits for, if any.
+export const waitedFor = (q: Queue, queues: Queue[]) =>
+  q.waitsFor === undefined ? undefined : queues.find(o => o !== q && sameName(o.name, q.waitsFor!))
+
+// Whether `q` waits for a queue that's still open. A queue in a loop of Waits
+// lines doesn't wait, so the loop isn't hidden.
+export function isWaiting(q: Queue, queues: Queue[]) {
+  const seen = new Set<Queue>([q])
+  for (let o = waitedFor(q, queues); o; o = waitedFor(o, queues)) {
+    if (o === q) return false
+    if (seen.has(o)) return true // a loop further on, which q waits behind
+    seen.add(o)
+  }
+  return waitedFor(q, queues) !== undefined
+}
+
+// The active queues: the open ones not waiting for another open queue.
+export const activeQueues = (queues: Queue[]) => queues.filter(q => !isWaiting(q, queues))
+
 // The queues `next-session [named]` or a command's queue argument means: the
-// named one, matched without regard to case, or every open queue.
+// named open one, matched without regard to case, or every active queue.
 export const pickQueues = (queues: Queue[], named: string | undefined) =>
-  named === undefined ? queues : queues.filter(q => q.name.toLowerCase() === named.toLowerCase())
+  named === undefined ? activeQueues(queues) : queues.filter(q => sameName(q.name, named))
 
 // --- The session table ------------------------------------------------------
 

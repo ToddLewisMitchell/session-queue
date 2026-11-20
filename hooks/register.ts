@@ -6,8 +6,10 @@ import { pane, registerPaneCommand } from './pane'
 import { openQueues, pickQueues } from './queues'
 import { refresh } from './status'
 
-// Six jobs, all read from the open queue files:
-// - Under the prompt: each open queue's Parallels setting, plus `auto go-ahead` and
+// Six jobs, all read from the open queue files. Unnamed, `next-session` and
+// the commands mean the active queues: those not waiting for another open one
+// (`activeQueues` in queues.ts).
+// - Under the prompt: each active queue's Parallels setting, plus `auto go-ahead` and
 //   `auto-commit` when those settings are on, so the user always knows how
 //   much runs without asking them. Re-read when the session starts and after
 //   every turn, so a change shows as soon as the turn that made it ends.
@@ -26,12 +28,12 @@ import { refresh } from './status'
 
 // `next-session`, optionally followed by a queue name, and nothing else, in
 // any case (`Next-session` too).
-const NEXT = /^\s*next-session(?:\s+([\w-]+))?\s*$/i
+const NEXT = /^\s*next-session(?:\s+([\w.-]+))?\s*$/i
 // Agents whose report would be lost if the conversation were cleared.
 const BUSY = new Set(['pending', 'running', 'waiting'])
 
 // Whether to clear before this `next-session`: the queue it names (or, unnamed,
-// every open queue) has Clear on, the conversation has messages, and no
+// every active queue) has Clear on, the conversation has messages, and no
 // background agent of this conversation is still at work.
 async function shouldClear($: EngineInterface, named: string | undefined) {
   const picked = pickQueues(await openQueues($), named)

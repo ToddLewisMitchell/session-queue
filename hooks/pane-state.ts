@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 import type { PaneQueue } from '../types'
-import { isOpen, nextRowOf, rows, type Queue } from './queues'
+import { activeQueues, isOpen, nextRowOf, rows, type Queue } from './queues'
 
 // What the queue pane (pane.tsx) draws, kept in `$.state`: written by `refresh`
 // in status.ts, read by the pane. A file of its own so status.ts and pane.tsx
@@ -11,11 +11,12 @@ import { isOpen, nextRowOf, rows, type Queue } from './queues'
 export const PANE = 'session-queue'
 // Change the tag when PaneQueue's fields change: a reload keeps what the old
 // code stored, and the tag declines it.
-const queues = atom({ plugin: 'session-queue', key: 'queues' } as const, [], { shape: 'queues-1' })
+const queues = atom({ plugin: 'session-queue', key: 'queues' } as const, [], { shape: 'queues-2' })
 
-// The pane's rows for the open queues.
+// The pane's rows for the active queues (a queue waiting for another doesn't
+// run yet, so it isn't shown).
 export function paneQueues(open: Queue[]): PaneQueue[] {
-  return open.map(q => {
+  return activeQueues(open).map(q => {
     const all = rows(q.text)
     // By identity, so a second row with the same id isn't marked too.
     const next = nextRowOf(all)
@@ -23,7 +24,7 @@ export function paneQueues(open: Queue[]): PaneQueue[] {
       name: q.name,
       rows: all
         .filter(isOpen)
-        .map(r => ({ id: r.id, session: r.session, status: r.status, isNext: r === next })),
+        .map(r => ({ id: r.id, session: r.session, status: r.status, isNext: r === next, isRunning: /^IN PROGRESS\b/i.test(r.status) })),
     }
   })
 }

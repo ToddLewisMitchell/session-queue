@@ -47,8 +47,8 @@ export async function queueContext($: EngineInterface, named: string | undefined
   const plural = picked.length > 1 ? 'files' : 'file'
   const text = (what: string, files: string[]) =>
     `session-queue attached ${what}, read as this prompt was sent. ${NOTE}\n\n${files.join('\n\n')}`
-  // With several queues and none named, the skill asks which to run, so attach
-  // only the queue files. With one, its next topic file too, while it fits.
+  // With several active queues and none named, the skill asks which to run, so
+  // attach only the queue files. With one, its next topic file too, while it fits.
   const topic = picked.length === 1 ? await topicBlock($, picked[0]!) : undefined
   if (topic) {
     const both = text('the open queue file and the topic file of its first TODO or PAUSED row', [...queueFiles, topic])

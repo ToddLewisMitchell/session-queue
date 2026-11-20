@@ -70,11 +70,20 @@ test('the pane follows the queue file after a turn', async ($, on) => {
   const ui = await $.ui.mount(PANE('desktop'))
   expect((await ui.find({ type: 'Text', text: /2 Second/ }))?.text).toBe('▶ 2 Second')
 
-  files['queue-demo.md'] = QUEUE.replace('| 2 | Second | `d/two.md` | TODO |', '| 2 | Second | `d/two.md` | IN PROGRESS 2026-11-03 (building; s-1) |')
+  files['queue-demo.md'] = QUEUE.replace('| 2 | Second | `d/two.md` | TODO |', '| 2 | Second | `d/two.md` | IN PROGRESS 2026-11-03 (building; s-1) |').replace('TODO (last)', 'TODO')
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
-  expect((await ui.find({ type: 'Text', text: /2 Second/ }))?.text).toBe('  2 Second')
+  // The running row is marked ● and in bold; the next one keeps ▶, not bold.
+  const running = await ui.find({ type: 'Text', text: /2 Second/ })
+  expect(running?.text).toBe('● 2 Second')
+  expect(running?.props.bold).toBe(true)
+  const next = await ui.find({ type: 'Text', text: /3 Third/ })
+  expect(next?.text).toBe('▶ 3 Third')
+  expect(next?.props.bold).toBe(false)
   expect((await ui.find({ type: 'Text', text: /building/ }))?.text).toContain('IN PROGRESS 2026-11-03 (building; s-1)')
   await ui.unmount()
+  const widget = await $.ui.mount(PANE('desktop', 'widget'))
+  expect((await widget.find({ type: 'Text' }))?.text).toBe('running 2 Second · next 3')
+  await widget.unmount()
 })
 
 test('a minimized pane shows what next-session runs; two queues are named', async ($, on) => {
