@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { gitActions } from './guard'
+import { approvalOf, gitActions } from './guard'
 
 // --- Reading the command line ----------------------------------------------
 
@@ -76,14 +76,23 @@ test('a command it cannot read asks when it mentions git', () => {
 
 // --- The verdicts ------------------------------------------------------------
 
-function fake(on: any, files: Record<string, string>, opts: { ignored?: boolean; core?: 'allow' | 'ask' | 'deny' } = {}) {
+function fake(on: any, files: Record<string, string>, opts: { ignored?: boolean; core?: 'allow' | 'ask' | 'deny'; reply?: string } = {}) {
   on('fs.list', () => ({
     value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })),
   }))
   on('fs.read', (_: unknown, e: { path: string }) => ({ value: files[e.path.split('/').pop() ?? ''] }))
   on('process.run', () => ({ value: { exitCode: opts.ignored ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('tool.check', () => ({ decision: opts.core ?? 'allow' }))
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  // Claude's last reply, which a bare "yes" answers.
+  on('session.messages', () => ({ value: [
+    { role: 'user', text: 'next-session', toolUses: [] },
+    { role: 'assistant', text: opts.reply ?? 'Proposed commit message: Add x. Approve?', toolUses: [] },
+  ] }))
 }
+
+const say = ($: any, text: string, kind = 'composer', turnId?: string) =>
+  $.prompt.submit({ text, wait: false, origin: { kind }, ...(turnId ? { turnId } : {}) })
 
 const check = ($: any, command: string) => $.tool.check({ tool: 'Bash', input: { command } })
 const APPROVE = { 'queue-a.md': '**Commits.** approve (chosen 2026-11-19)\n' }
@@ -155,4 +164,66 @@ test('an unreadable git command asks', async ($, on) => {
 test('force-staging a committed queue folder is allowed', async ($, on) => {
   fake(on, AUTO, { ignored: false })
   expect((await check($, 'git add -f queues/')).decision).toBe('allow')
+})
+
+// --- The user's own approval -----------------------------------------------
+
+test('a short approval is read as one; anything else is not', () => {
+  for (const t of ['commit', 'Commit.', 'commit it', 'yes commit', 'Yes, please commit', 'go ahead and commit', 'Yes. Commit it.', 'approved', 'lgtm', 'merge'])
+    expect([t, approvalOf(t)]).toEqual([t, 'named'])
+  for (const t of ['yes', 'y', 'ok!', 'go ahead', 'yes please', 'Okay.'])
+    expect([t, approvalOf(t)]).toEqual([t, 'bare'])
+  for (const t of ["don't commit yet", 'commit?', 'no', 'not yet', 'wait', 'it', 'please', '', 'yes but fix the test first', 'commit and push', 'looks good', 'go with that'])
+    expect([t, approvalOf(t)]).toEqual([t, undefined])
+})
+
+test('a bare yes approves only when Claude last asked about a commit', async ($, on) => {
+  fake(on, APPROVE, { reply: 'Scope: the guard change. Nothing to decide. Go ahead?' })
+  await say($, 'yes')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
+  await say($, 'commit')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test('the user typing an approval skips the commit dialog; a push still asks', async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'commit')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+  expect((await check($, 'git merge --no-ff q/1-x')).decision).toBe('allow')
+  expect((await check($, 'git push')).decision).toBe('ask')
+})
+
+test('from the phone counts too', async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'yes', 'bridge')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test('the next prompt takes the approval back', async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'commit')
+  await say($, 'actually, add a test first')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
+})
+
+test("a plugin's prompt is no approval, and starting a turn takes one back", async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'commit')
+  await say($, 'yes', 'plugin')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
+})
+
+test("a notification delivered into the running turn leaves the user's approval", async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'commit')
+  await say($, 'agent done', 'task-notification', 't1')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test('a new conversation holds no approval', async ($, on) => {
+  fake(on, APPROVE)
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  await say($, 'commit')
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
 })

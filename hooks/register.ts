@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
-import { guard } from './guard'
+import { guard, notePrompt } from './guard'
 import { pane, registerPaneCommand } from './pane'
 import { openQueues, pickQueues } from './queues'
 import { refresh } from './status'
@@ -20,7 +20,8 @@ import { refresh } from './status'
 //   `next-session` (`context.ts`), so the session doesn't spend tool calls
 //   reading them.
 // - The commit guard (`guard.ts`): commits, merges, and pushes ask first, as
-//   the Commits setting says.
+//   the Commits setting says, unless the user's latest message approved the
+//   commit (`notePrompt`, fed every prompt below).
 // - Slash commands (`commands.ts`): `/queue` shows the queue, and
 //   `/queue-<setting>` changes one settings line, with no model turn.
 // - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows,
@@ -41,6 +42,17 @@ async function shouldClear($: EngineInterface, named: string | undefined) {
   const last = await $.session.messages({ last: 1 })
   if ('deny' in last || last.length === 0) return false
   return !(await $.agent.list()).some(a => BUSY.has(a.status))
+}
+
+// The engine hands a dropped prompt back to the box as a draft; once the
+// clear has run, the `next-session` it held is on its way as the resubmit, so
+// empty the box, but only while it still reads just that (never a new draft).
+// Never throws: a box left full mustn't read as a failed clear.
+async function emptyBox($: EngineInterface, text: string) {
+  try {
+    const box = await $.prompt.read()
+    if (box.text.trim() === text) await $.prompt.fill({ text: '' })
+  } catch {}
 }
 
 // Set while a clear before `next-session` runs: the queue it names, for the
@@ -66,6 +78,7 @@ export const register: Register = on => {
   })
 
   on('session.start', async ($, e, next) => {
+    await notePrompt($, undefined) // a fresh conversation holds no approval
     const done = await next(e)
     await refresh($).catch(() => undefined)
     // On an engine without the command API, the session still starts.
@@ -81,6 +94,7 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    await notePrompt($, e)
     // `next-session` alone, between turns (not a /command, a meta prompt, or a
     // prompt queued into a running turn).
     const m = NEXT.exec(e.text)
@@ -101,7 +115,10 @@ export const register: Register = on => {
             cleared = undefined // no fresh conversation: no context blocks
             $.ui.toast('session-queue: couldn’t clear; running next-session here')
           })
+          .then(() => emptyBox($, text))
           .then(() => $.prompt.submit({ text }))
+          // Again once it's in, in case the box got the draft back late.
+          .then(() => emptyBox($, text))
       })
       return { drop: `Clearing the conversation, then running ${text}` }
     }

@@ -119,6 +119,23 @@ test('next-session clears a used conversation, then runs', async ($, on) => {
   expect(calls).toEqual(['/clear', 'next-session'])
 })
 
+test('the clear empties the box of the dropped next-session, never a new draft', async ($, on) => {
+  const { clock } = fakeSession(on, QUEUE_ON)
+  let box = 'next-session'
+  const fills: string[] = []
+  on('prompt.read', () => ({ value: { text: box, cursor: box.length } }))
+  on('prompt.fill', (_: unknown, e: { text: string }) => (fills.push(e.text), (box = e.text), { isFilled: true }))
+  await typed($, 'next-session')
+  await clock.settle()
+  expect(fills).toEqual([''])
+
+  box = 'a new draft'
+  fills.length = 0
+  await typed($, 'next-session')
+  await clock.settle()
+  expect(fills).toEqual([])
+})
+
 test('a fresh conversation is not cleared', async ($, on) => {
   const { clock, calls } = fakeSession(on, QUEUE_ON, { messages: 0 })
   await typed($, 'next-session')

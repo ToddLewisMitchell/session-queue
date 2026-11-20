@@ -1,3 +1,4 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 import { activeQueues, openQueues } from './queues'
 
@@ -13,6 +14,10 @@ import { activeQueues, openQueues } from './queues'
 //   many users keep `queues/` private.
 // - A command it can't read (an unclosed quote or heredoc) that mentions git
 //   asks too: the guard fails closed.
+// - The commit-or-merge dialog is skipped when the user's latest message was
+//   a short approval ("commit", or "yes" to a reply about the commit;
+//   `approvalOf`): they have just answered the question the dialog would ask.
+//   A push still asks.
 
 export type GitAction = 'commit' | 'merge' | 'push' | 'force-add' | 'unreadable'
 
@@ -253,6 +258,66 @@ export function gitActions(command: string, depth = 0): Set<GitAction> {
   return found
 }
 
+// The words a short approval is made of: every word is from NAMED, BARE, or
+// FILLER, and at least one from NAMED or BARE ("commit", "yes please", "go
+// ahead and commit", "lgtm"). A negation ("don't commit"), a question
+// ("commit?"), or anything longer is no approval, so the dialog stays.
+// NAMED words say what's approved; a BARE "yes" or "ok" approves only when
+// Claude's last reply was about a commit or merge (`replyIsAboutCommit`), so
+// a "yes" to some other question (a go-ahead) doesn't wave a commit through.
+const NAMED = new Set(['commit', 'merge', 'approve', 'approved', 'lgtm'])
+const BARE = new Set(['yes', 'y', 'yeah', 'yep', 'ok', 'okay', 'go'])
+const FILLER = new Set(['it', 'now', 'please', 'ahead', 'and'])
+const MAX_WORDS = 8
+
+export type Approval = 'named' | 'bare' | undefined
+
+export function approvalOf(text: string): Approval {
+  if (text.includes('?')) return undefined
+  const words = text
+    .toLowerCase()
+    .split(/[\s,;:]+/)
+    .map(w => w.replace(/[.!]+$/, ''))
+    .filter(Boolean)
+  if (words.length === 0 || words.length > MAX_WORDS) return undefined
+  if (!words.every(w => NAMED.has(w) || BARE.has(w) || FILLER.has(w))) return undefined
+  return words.some(w => NAMED.has(w)) ? 'named' : words.some(w => BARE.has(w)) ? 'bare' : undefined
+}
+
+// Whether the user's latest message approved a commit or merge, kept in this
+// session's `$.state` (each conversation its own) and written by `notePrompt`.
+// It holds until the next prompt, so one approval covers the session's commit,
+// its merge, and the hash-recording commit (SKILL.md, workflow 3, step 6).
+const approved = atom({ plugin: 'session-queue', key: 'approved' } as const, false, { shape: 'approved-1' })
+
+async function replyIsAboutCommit($: EngineInterface) {
+  const recent = await $.session.messages({ last: 6 })
+  if ('deny' in recent) return false
+  const reply = [...recent].reverse().find(m => m.role === 'assistant' && m.text.trim() !== '')
+  return reply !== undefined && /\b(commit|merge)/i.test(reply.text)
+}
+
+// Called by `register.ts` for every prompt before anything else reads it, and
+// with `undefined` when a session starts (a /clear). Only the user's own
+// typing (terminal or phone) can approve, and any other prompt that starts a
+// turn, or a slash command, takes the approval back. A prompt from elsewhere
+// delivered into a running turn (a background task's notification) isn't the
+// user's message, so it leaves the approval as it was. Never throws; on a
+// failure to read, there's no approval.
+export async function notePrompt(
+  $: EngineInterface,
+  e: { text: string; command?: unknown; isMeta?: true; turnId?: string; origin: { kind: string } } | undefined,
+) {
+  let yes = false
+  if (e !== undefined) {
+    const typed = !e.isMeta && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')
+    if (!typed && e.turnId !== undefined) return
+    const kind = typed && !e.command ? approvalOf(e.text) : undefined
+    yes = kind === 'named' || (kind === 'bare' && (await replyIsAboutCommit($).catch(() => false)))
+  }
+  await update($, approved, () => yes).catch(() => undefined)
+}
+
 async function queuesIgnored($: EngineInterface) {
   try {
     return (await $.process.run(['git', 'check-ignore', '-q', 'queues/'])).exitCode === 0
@@ -286,7 +351,7 @@ export function guard(on: On) {
       return { decision: 'ask', reason: `${NAME}: pushing always needs your approval.` }
     if (actions.has('unreadable'))
       return { decision: 'ask', reason: `${NAME}: couldn't read this command to see whether it commits or pushes. Allow it?` }
-    if ((actions.has('commit') || actions.has('merge')) && activeQueues(queues).some(q => !q.autoCommit)) {
+    if ((actions.has('commit') || actions.has('merge')) && activeQueues(queues).some(q => !q.autoCommit) && !(await read($, approved))) {
       // A waiting queue runs no sessions yet, so its setting doesn't count (as
       // under the prompt).
       const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
