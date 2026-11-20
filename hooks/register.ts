@@ -49,12 +49,26 @@ async function shouldClear($: EngineInterface, named: string | undefined) {
 // clear has run, the `next-session` it held is on its way as the resubmit, so
 // empty the box, but only while it still reads just that (never a new draft).
 // Never throws: a box left full mustn't read as a failed clear.
+// Says whether it emptied the box, so the watch below stands down once the
+// draft has come back and gone.
 async function emptyBox($: EngineInterface, text: string) {
   try {
     const box = await $.prompt.read()
-    if (box.text.trim() === text) await $.prompt.fill({ text: '' })
-  } catch {}
+    if (box.text.trim() !== text) return false
+    await $.prompt.fill({ text: '' })
+    if (watchBox?.text === text) watchBox = undefined
+    return true
+  } catch {
+    return false
+  }
 }
+
+// After a clear before `next-session`: the text the box must not be left
+// holding, until when. The engine may hand the dropped prompt back to the box
+// after both of the timer's checks have run (seen live on 2026-11-20), so
+// `prompt.change` empties it whenever it comes back within the window.
+let watchBox: { text: string; until: number } | undefined
+const WATCH_BOX_MS = 30_000
 
 // Set while a clear before `next-session` runs: the queue it names, for the
 // fresh conversation's context blocks. Good for a short window only, so a
@@ -77,6 +91,24 @@ export const register: Register = on => {
     if (!pending || (await $.clock.now()) - pending.at > CLEARED_FOR_MS) return done
     const text = await queueContext($, pending.named).catch(() => undefined)
     return text === undefined ? done : { ...done, blocks: [...done.blocks, { name: 'sessionQueue', text }] }
+  })
+
+  // The dropped `next-session` coming back to the box, emptied once, on a
+  // timer so the fill doesn't run inside this event. Only the engine's own
+  // writes count (a kind not known here is the engine's): a plugin's fill, or
+  // the user's history recall or undo, puts it there on purpose.
+  on('prompt.change', async ($, e, next) => {
+    const done = await next(e)
+    const w = watchBox
+    const deliberate = e.origin.kind === 'plugin' || e.origin.kind === 'history' || e.origin.kind === 'undo'
+    if (w && !deliberate && e.text.trim() === w.text) {
+      if ((await $.clock.now()) > w.until) watchBox = undefined
+      else {
+        watchBox = undefined
+        $.clock.after(0, () => void emptyBox($, w.text))
+      }
+    }
+    return done
   })
 
   on('session.start', async ($, e, next) => {
@@ -108,13 +140,16 @@ export const register: Register = on => {
       // The resubmit below doesn't come back through this hook (the engine
       // skips the hook a call came from, and the timer counts as this one), so
       // the fresh conversation's context blocks carry the queue files instead.
-      cleared = { named: m[1], at: await $.clock.now() }
+      const at = await $.clock.now()
+      cleared = { named: m[1], at }
+      watchBox = { text, until: at + WATCH_BOX_MS }
       // The clear and the resubmit outlive this dispatch, so they run on a timer.
       $.clock.after(0, () => {
         void $.command
           .run({ command: 'clear' })
           .catch(() => {
             cleared = undefined // no fresh conversation: no context blocks
+            watchBox = undefined // and no dropped draft to watch for
             $.ui.toast('session-queue: couldn’t clear; running next-session here')
           })
           .then(() => emptyBox($, text))

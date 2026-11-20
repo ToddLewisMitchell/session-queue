@@ -154,6 +154,44 @@ test('the clear empties the box of the dropped next-session, never a new draft',
   expect(fills).toEqual([])
 })
 
+test('the dropped next-session coming back to the box later is emptied once', async ($, on) => {
+  const { clock } = fakeSession(on, QUEUE_ON)
+  let box = ''
+  const fills: string[] = []
+  on('prompt.read', () => ({ value: { text: box, cursor: box.length } }))
+  on('prompt.fill', (_: unknown, e: { text: string }) => (fills.push(e.text), (box = e.text), { isFilled: true }))
+  on('prompt.change', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  await typed($, 'next-session')
+  await clock.settle()
+  expect(fills).toEqual([]) // the box was empty at both checks
+  // The engine hands the draft back afterwards.
+  box = 'next-session'
+  await ($ as any).prompt.change({ text: box, cursor: box.length, origin: { kind: 'engine' } })
+  await clock.settle()
+  expect(fills).toEqual([''])
+  // Once only: a second put-back stays.
+  box = 'next-session'
+  await ($ as any).prompt.change({ text: box, cursor: box.length, origin: { kind: 'engine' } })
+  await clock.settle()
+  expect(fills).toEqual([''])
+})
+
+test('the user recalling next-session after the clear keeps it', async ($, on) => {
+  const { clock } = fakeSession(on, QUEUE_ON)
+  let box = ''
+  const fills: string[] = []
+  on('prompt.read', () => ({ value: { text: box, cursor: box.length } }))
+  on('prompt.fill', (_: unknown, e: { text: string }) => (fills.push(e.text), (box = e.text), { isFilled: true }))
+  on('prompt.change', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  await typed($, 'next-session')
+  await clock.settle()
+  box = 'next-session'
+  for (const kind of ['history', 'undo'])
+    await ($ as any).prompt.change({ text: box, cursor: box.length, origin: { kind } })
+  await clock.settle()
+  expect(fills).toEqual([])
+})
+
 test('a fresh conversation is not cleared', async ($, on) => {
   const { clock, calls } = fakeSession(on, QUEUE_ON, { messages: 0 })
   await typed($, 'next-session')
