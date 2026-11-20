@@ -1,6 +1,6 @@
 import type { EngineInterface, On } from 'claude-code'
 import { refresh } from './status'
-import { activeQueues, isOpen, isWaiting, nextRow, waitedFor, openQueues, pickQueues, rows, settingValue, type Queue } from './queues'
+import { activeQueues, isOpen, isWaiting, nextRow, waitedFor, openQueues, parseQueue, pickQueues, rows, settingValue, type Queue } from './queues'
 
 // Slash commands that read or change the queue file with no model turn:
 // - `/queue [name]`: the open rows, what `next-session` runs next, and the
@@ -12,7 +12,7 @@ import { activeQueues, isOpen, isWaiting, nextRow, waitedFor, openQueues, pickQu
 // The queue name is needed only with two active queues (a queue waiting for
 // another isn't active); it and the value may come in either order, in any case.
 
-type Setting = {
+export type Setting = {
   command: string
   // What the command does, in the user's terms, for the command list.
   description: string
@@ -106,6 +106,32 @@ export function setLine(text: string, s: Setting, value: string, date: string) {
   return `${text.trimEnd()}${nl}${nl}${line}${nl}`
 }
 
+// Sets one settings line of queue `q`'s file, re-read just before writing so
+// an edit since the read isn't lost. `value` may be worked out from that text
+// (the pane's buttons step on from the current value). Used by the commands
+// and the queue pane's settings buttons (pane.tsx). Returns the value written,
+// or why it couldn't.
+export async function writeSetting($: EngineInterface, q: Queue, s: Setting, value: string | ((current: Queue) => string)) {
+  const path = `${q.dir}/queue-${q.name}.md`
+  try {
+    const current = await $.fs.read(path)
+    const v = typeof value === 'string' ? value : value(parseQueue(q.name, q.dir, current))
+    await $.fs.write(path, setLine(current, s, v, today(await $.clock.now())))
+    return { value: v }
+  } catch {
+    return { failed: `Couldn't update ${path}; nothing was changed.` }
+  }
+}
+
+// The waiting queues an unnamed change left on another value, as a sentence
+// (empty when none): a queue that copied these settings isn't left behind
+// unseen.
+export function keptBy(queues: Queue[], s: Setting, value: string) {
+  const waiting = queues.filter(o => isWaiting(o, queues) && settingValue(o.text, s.name) !== value)
+  if (waiting.length === 0) return ''
+  return `Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
+}
+
 // The one queue a command acts on, or the reason there isn't one.
 function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
   const picked = pickQueues(queues, named)
@@ -185,20 +211,14 @@ export function commands(on: On) {
       if (typeof q === 'string') return { text: q }
       if (settingValue(q.text, s.name) === value)
         return { text: `Queue ${q.name}: ${s.name} is already ${value}.` }
-      const path = `${q.dir}/queue-${q.name}.md`
-      try {
-        // Re-read just before writing, so an edit since the read isn't lost.
-        const current = await $.fs.read(path)
-        await $.fs.write(path, setLine(current, s, value, today(await $.clock.now())))
-      } catch {
-        return { text: `Couldn't update ${path}; nothing was changed.` }
-      }
-      await refresh($).catch(() => undefined)
+      const written = await writeSetting($, q, s, value)
+      if ('failed' in written) return { text: written.failed }
+      // Quiet: this reply reports the change, so no toast repeats it.
+      await refresh($, { quiet: true }).catch(() => undefined)
       // Unnamed, only the active queue changed: say which waiting ones didn't,
       // so a queue that copied these settings isn't left behind unseen.
-      const waiting = rest.length === 0 ? queues.filter(o => isWaiting(o, queues) && settingValue(o.text, s.name) !== value) : []
-      const kept = waiting.length === 0 ? '' : ` Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
-      return { text: `Queue ${q.name}: ${s.name} set to ${value}.${kept}` }
+      const kept = rest.length === 0 ? keptBy(queues, s, value) : ''
+      return { text: `Queue ${q.name}: ${s.name} set to ${value}.${kept ? ` ${kept}` : ''}` }
     })
   }
 }

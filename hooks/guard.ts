@@ -1,6 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
 import { activeQueues, openQueues } from './queues'
+import { noteAutoCommit } from './settings-state'
 
 // The commit guard: SKILL.md Principle 2 and the Commits setting, enforced
 // on the model's Bash calls while a queue is open.
@@ -18,6 +19,8 @@ import { activeQueues, openQueues } from './queues'
 //   a short approval ("commit", or "yes" to a reply about the commit;
 //   `approvalOf`): they have just answered the question the dialog would ask.
 //   A push still asks.
+// - A commit or merge let through because Commits is `auto` is recorded, so
+//   its row in the transcript says so (display.tsx).
 
 export type GitAction = 'commit' | 'merge' | 'push' | 'force-add' | 'unreadable'
 
@@ -351,11 +354,17 @@ export function guard(on: On) {
       return { decision: 'ask', reason: `${NAME}: pushing always needs your approval.` }
     if (actions.has('unreadable'))
       return { decision: 'ask', reason: `${NAME}: couldn't read this command to see whether it commits or pushes. Allow it?` }
-    if ((actions.has('commit') || actions.has('merge')) && activeQueues(queues).some(q => !q.autoCommit) && !(await read($, approved))) {
+    if (actions.has('commit') || actions.has('merge')) {
       // A waiting queue runs no sessions yet, so its setting doesn't count (as
-      // under the prompt).
-      const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
-      return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is approve. Allow this ${what}?` }
+      // in the footer).
+      const active = activeQueues(queues)
+      const asks = active.some(q => !q.autoCommit)
+      if (asks && !(await read($, approved))) {
+        const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
+        return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is approve. Allow this ${what}?` }
+      }
+      // For the note on the call's row (display.tsx).
+      if (!asks && active.length > 0 && e.tool_use_id !== undefined) await noteAutoCommit($, e.tool_use_id).catch(() => undefined)
     }
     return core
   }).catch(($, e, next) => {

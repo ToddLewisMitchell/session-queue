@@ -1,6 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
+import { display } from './display'
 import { guard, notePrompt } from './guard'
 import { pane, registerPaneCommand } from './pane'
 import { openQueues, pickQueues } from './queues'
@@ -9,10 +10,10 @@ import { refresh } from './status'
 // Six jobs, all read from the open queue files. Unnamed, `next-session` and
 // the commands mean the active queues: those not waiting for another open one
 // (`activeQueues` in queues.ts).
-// - Under the prompt: each active queue's Parallels setting, plus `auto go-ahead` and
-//   `auto-commit` when those settings are on, so the user always knows how
-//   much runs without asking them. Re-read when the session starts and after
-//   every turn, so a change shows as soon as the turn that made it ends.
+// - The settings display (`display.tsx`): each active queue's settings in the
+//   prompt footer, a note on auto commits, and a toast on a change. Re-read
+//   when the session starts and after every turn (`refresh`), so a change
+//   shows as soon as the turn that made it ends.
 // - Clear: when the user types `next-session` in a conversation that already
 //   has messages, run `/clear` first and then `next-session` in the fresh
 //   conversation, unless the queue's Clear line is `off`.
@@ -24,8 +25,8 @@ import { refresh } from './status'
 //   commit (`notePrompt`, fed every prompt below).
 // - Slash commands (`commands.ts`): `/queue` shows the queue, and
 //   `/queue-<setting>` changes one settings line, with no model turn.
-// - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows,
-//   redrawn whenever the status line is refreshed.
+// - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows
+//   and the settings, with a button to change each, redrawn on every refresh.
 
 // `next-session`, optionally followed by a queue name, and nothing else, in
 // any case (`Next-session` too).
@@ -65,6 +66,7 @@ export const register: Register = on => {
   guard(on)
   commands(on)
   pane(on)
+  display(on)
 
   // The first message after the clear carries the queue files as a context
   // block of their own.

@@ -1,7 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 // Each hook here stands for the engine: a fake queues/ folder, and a record
-// of every status line the plugin pins.
+// of every status line the plugin sets (now only cleared: the settings are in
+// the footer).
 function fakeQueues(on: any, files: Record<string, string>) {
   const shown: (string | undefined)[] = []
   on('fs.list', () => ({
@@ -10,86 +11,103 @@ function fakeQueues(on: any, files: Record<string, string>) {
   on('fs.read', (_: unknown, e: { path: string }) => ({ value: files[e.path.split('/').pop() ?? ''] }))
   on('ui.status', (_: unknown, e: { text?: string }) => (shown.push(e.text), { value: undefined }))
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  recordFooter(on)
   return shown
 }
 
 const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
+// The prompt footer's mode labels as the plugin leaves them, joined as the
+// footer joins them: a hook beneath the plugin (registered before the test's
+// first call of $, by `recordFooter`) records what reaches it.
+let seen: readonly string[] = []
+function recordFooter(on: any) {
+  on('ui.render', { component: 'SessionMode' }, (_: unknown, e: any, next: any) => ((seen = e.props.modes), next(e)))
+}
+async function footer($: any, modes: string[] = []) {
+  seen = []
+  const ui = await $.ui.mount({ plugin: 'session-queue', component: 'SessionMode', surface: 'terminal', props: { modes } })
+  await ui.unmount()
+  return seen.join(' & ')
+}
+
 test('auto shows a flag', async ($, on) => {
-  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Parallels.** auto (chosen 2026-11-13).\n' })
+  fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Parallels.** auto (chosen 2026-11-13).\n' })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
+  expect(await footer($)).toBe('queue: parallels ⚡ auto')
 })
 
 test('an older Pace line reads as Parallels; a Parallels line wins over it', async ($, on) => {
-  const shown = fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
+  fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
   await start($)
-  expect(shown.at(-1)).toBe('a: off · b: ask')
+  expect(await footer($)).toBe('queue a: parallels off & queue b: parallels ask')
 })
 
 test('a missing Parallels line is ask', async ($, on) => {
-  const shown = fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
+  fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ask')
+  expect(await footer($)).toBe('queue: parallels ask')
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
-  const shown = fakeQueues(on, {
+  fakeQueues(on, {
     'queue-demo.md': '# Demo\n\nClosed 2026-11-10, a record only.\n\n**Pace.** speed\n',
     'queue-calc2.md': '# Calc2\n\nSuccessor to `queue-demo.md` (closed 2026-11-10, a record only).\n\n**Pace.** economy\n',
     'notes.md': '**Pace.** speed\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: off')
+  expect(await footer($)).toBe('queue: parallels off')
 })
 
 test('a row that mentions closing a record stays open', async ($, on) => {
-  const shown = fakeQueues(on, {
+  fakeQueues(on, {
     'queue-demo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
+  expect(await footer($)).toBe('queue: parallels ⚡ auto')
 })
 
 test('two queues on different Parallels settings are named', async ($, on) => {
-  const shown = fakeQueues(on, {
+  fakeQueues(on, {
     'queue-a.md': '**Pace.** speed\n',
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('a: ⚡ auto · b: ask')
+  expect(await footer($)).toBe('queue a: parallels ⚡ auto & queue b: parallels ask')
 })
 
-test('no queue folder clears the line', async ($, on) => {
+test('no queue folder: the old status line is cleared and the footer is left alone', async ($, on) => {
   const shown: (string | undefined)[] = []
   on('fs.list', () => { throw new Error('ENOENT') })
   on('ui.status', (_: unknown, e: { text?: string }) => (shown.push(e.text), { value: undefined }))
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  recordFooter(on)
   await start($)
   expect(shown.at(-1)).toBe(undefined)
+  expect(await footer($, ['focus'])).toBe('focus')
 })
 
 test('auto go-ahead and auto-commit join the flag', async ($, on) => {
-  const shown = fakeQueues(on, {
+  fakeQueues(on, {
     'queue-demo.md': '**Pace.** speed\n\n**Go-ahead.** auto (chosen 2026-11-19)\n\n**Commits.** auto (chosen 2026-11-19)\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ⚡ auto · auto go-ahead · auto-commit')
+  expect(await footer($)).toBe('queue: parallels ⚡ auto · auto go-ahead · auto-commit')
 })
 
 test('ask and approve add nothing', async ($, on) => {
-  const shown = fakeQueues(on, { 'queue-demo.md': '**Go-ahead.** ask\n\n**Commits.** approve\n' })
+  fakeQueues(on, { 'queue-demo.md': '**Go-ahead.** ask\n\n**Commits.** approve\n' })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ask')
+  expect(await footer($)).toBe('queue: parallels ask')
 })
 
 test('two queues with different settings are named', async ($, on) => {
-  const shown = fakeQueues(on, {
+  fakeQueues(on, {
     'queue-a.md': '**Pace.** balanced\n\n**Commits.** auto\n',
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('a: ask, auto-commit · b: ask')
+  expect(await footer($)).toBe('queue a: parallels ask · auto-commit & queue b: parallels ask')
 })
 
 // --- Clear before next-session ---------------------------------------------
@@ -233,13 +251,13 @@ test('a queue waiting for another: next-session runs the active one', async ($, 
   expect(text).toContain('NEXT TOPIC')
 })
 
-test('a waiting queue is not under the prompt', async ($, on) => {
-  const shown = fakeQueues(on, {
+test('a waiting queue is not in the footer', async ($, on) => {
+  fakeQueues(on, {
     'queue-a.md': '**Pace.** balanced\n',
     'queue-b.md': 'Waits for `queue-a.md`.\n\n**Pace.** speed\n',
   })
   await start($)
-  expect(shown.at(-1)).toBe('parallels: ask')
+  expect(await footer($)).toBe('queue: parallels ask')
 })
 
 test('a topic path outside the queue folder is not read', async ($, on) => {

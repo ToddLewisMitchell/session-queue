@@ -81,9 +81,9 @@ test('/queue with two queues shows both, or the one named in any case', async ($
   expect((await run($, 'queue', 'c')).text).toBe('No open queue named c. Open: a, b.')
 })
 
-test('/queue-parallels replaces an older Pace line with today\'s date and refreshes the status', async ($, on) => {
+test('/queue-parallels replaces an older Pace line with today\'s date', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
-  const { shown, clock } = fakeFolder(on, files)
+  const { clock } = fakeFolder(on, files)
   await clock.set(new Date(2026, 10, 20, 12).getTime())
   const { text } = await run($, 'queue-parallels', 'Auto')
   expect(text).toBe('Queue demo: Parallels set to auto.')
@@ -91,7 +91,6 @@ test('/queue-parallels replaces an older Pace line with today\'s date and refres
   expect(files['queue-demo.md']).toContain("**Parallels.** auto (chosen 2026-11-20; parallel runs would conflict; see the skill's Parallels section).\n\n**Commits.**")
   expect(files['queue-demo.md']).not.toContain('economy')
   expect(files['queue-demo.md']).not.toContain('**Pace.**')
-  expect(shown.at(-1)).toBe('parallels: ⚡ auto')
 })
 
 test('a missing line goes where the template puts it', async ($, on) => {
