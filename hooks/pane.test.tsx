@@ -1,12 +1,19 @@
 import { expect, test } from 'claude-code/testing'
 
 // A fake queues/ folder, and the engine's answers the pane needs.
-function fakeFolder(on: any, files: Record<string, string>, openResult: object = { isPlaced: true }) {
+// With `listAt`, the queue files are in `<listAt>/queues` only: the relative
+// `queues` (where the shell's cd is) holds other files, and other folders none.
+function fakeFolder(on: any, files: Record<string, string>, openResult: object = { isPlaced: true }, listAt?: string) {
   const opened: string[] = []
-  on('fs.list', () => ({
-    value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })),
-  }))
-  on('fs.read', (_: unknown, e: { path: string }) => ({ value: files[e.path.split('/').pop() ?? ''] }))
+  on('fs.list', (_: unknown, e: { path: string }) => {
+    if (listAt !== undefined && e.path === 'queues') return { value: [{ name: 'worker.ts', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }
+    if (listAt !== undefined && e.path !== `${listAt}/queues`) throw new Error('ENOENT')
+    return { value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })) }
+  })
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    if (listAt !== undefined && !e.path.startsWith(`${listAt}/queues/`)) throw new Error('ENOENT')
+    return { value: files[e.path.split('/').pop() ?? ''] }
+  })
   on('ui.status', () => ({ value: undefined }))
   on('ui.open', (_: unknown, e: { id: string }) => (opened.push(e.id), { value: openResult }))
   on('command.register', (_: unknown, e: { name: string }) => ({ value: { command: e.name } }))
@@ -104,6 +111,25 @@ test('with no open queue the pane says so', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount(PANE('terminal'))
   expect((await ui.find({ type: 'Text' }))?.text).toBe('No open queue (queues/queue-<name>.md).')
+  await ui.unmount()
+})
+
+test('after the shell cds into a subfolder with a queues/ of its own, the pane finds the queue under the project root', async ($, on) => {
+  fakeFolder(on, { 'queue-demo.md': QUEUE }, undefined, '/proj')
+  on('session.root', () => ({ value: '/proj' }))
+  await $.session.start({ cwd: '/proj/src', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(PANE('terminal'))
+  expect((await ui.find({ type: 'Text', text: /2 Second/ }))?.text).toBe('▶ 2 Second')
+  await ui.unmount()
+})
+
+test('a worktree session finds the queue in the main copy the engine names', async ($, on) => {
+  fakeFolder(on, { 'queue-demo.md': QUEUE }, undefined, '/repo')
+  on('session.root', () => ({ value: '/repo/.claude/worktrees/w' }))
+  on('vcs.detect', () => ({ vcs: 'git', root: '/repo/.claude/worktrees/w', mainRoot: '/repo', revision: null, branch: null, defaultBranch: null, remote: null }))
+  await $.session.start({ cwd: '/repo/.claude/worktrees/w', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(PANE('terminal'))
+  expect((await ui.find({ type: 'Text', text: /2 Second/ }))?.text).toBe('▶ 2 Second')
   await ui.unmount()
 })
 

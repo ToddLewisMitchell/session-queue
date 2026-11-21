@@ -321,9 +321,12 @@ export async function notePrompt(
   await update($, approved, () => yes).catch(() => undefined)
 }
 
-async function queuesIgnored($: EngineInterface) {
+// Asked from the folder that holds the queue folder found (`dir`), so a shell
+// `cd src` doesn't test `src/queues/` against an anchored `/queues/` rule.
+async function queuesIgnored($: EngineInterface, dir: string) {
+  const parent = dir === 'queues' ? undefined : dir.slice(0, -'/queues'.length)
   try {
-    return (await $.process.run(['git', 'check-ignore', '-q', 'queues/'])).exitCode === 0
+    return (await $.process.run(['git', 'check-ignore', '-q', 'queues/'], parent ? { cwd: parent } : undefined)).exitCode === 0
   } catch {
     return false
   }
@@ -345,7 +348,7 @@ export function guard(on: On) {
     const core = await next(e)
     if (core.decision === 'deny') return core
 
-    if (actions.has('force-add') && (await queuesIgnored($)))
+    if (actions.has('force-add') && (await queuesIgnored($, queues[0]!.dir)))
       return { decision: 'deny', reason: `${NAME}: git ignores queues/, so the queue's files stay unstaged. Leave queues/ out of this git add.` }
     const writes = ['commit', 'merge', 'push', 'unreadable'].some(a => actions.has(a as GitAction))
     if (writes && e.agentId !== undefined)

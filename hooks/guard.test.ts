@@ -158,6 +158,24 @@ test('a worktree session finds the queue in the main checkout', async ($, on) =>
   expect((await check($, 'git push')).decision).toBe('ask')
 })
 
+test('after a cd, the ignore check runs where the queue folder was found', async ($, on) => {
+  const cwds: (string | undefined)[] = []
+  on('fs.list', (_: unknown, e: { path: string }) => {
+    if (e.path !== '/repo/queues') throw new Error('ENOENT')
+    return { value: [{ name: 'queue-a.md', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }
+  })
+  on('fs.read', () => ({ value: '**Commits.** auto\n' }))
+  on('session.root', () => ({ value: '/repo' }))
+  on('session.cwd', () => ({ value: '/repo/src' }))
+  on('process.run', (_: unknown, e: { argv: readonly string[]; init?: { cwd?: string } }) => {
+    if (e.argv[1] === 'check-ignore') cwds.push(e.init?.cwd)
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('tool.check', () => ({ decision: 'allow' }))
+  expect((await check($, 'git add -f queues/')).decision).toBe('deny')
+  expect(cwds).toEqual(['/repo'])
+})
+
 test('an unreadable git command asks', async ($, on) => {
   fake(on, AUTO)
   expect((await check($, `cat <<EOF\ngit push`)).decision).toBe('ask')

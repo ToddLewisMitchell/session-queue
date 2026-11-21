@@ -61,19 +61,47 @@ const PARALLELS: readonly string[] = ['off', 'ask', 'auto']
 // An older queue's Pace line, read as the Parallels setting it became.
 const FROM_PACE: Record<string, Parallels> = { economy: 'off', balanced: 'ask', speed: 'auto' }
 
-// The queue folder sits at the main checkout's root. A session in a git
-// worktree (`.claude/worktrees/...`) doesn't have it when git ignores it, so
-// look in the main checkout, found through git's common dir.
+// The queue folder sits at the main checkout's root. A relative path follows
+// the shell's `cd`, so after `cd src` `queues` isn't there (or is some other
+// `queues/`, such as job-queue code): look under the project root next, which
+// a shell `cd` doesn't move. A session in a git worktree
+// (`.claude/worktrees/...`) doesn't have it when git ignores it, so then look
+// in the main checkout, found through the engine's working-copy lookup, else
+// (an engine before `$.vcs`, 2.1.328 and older) git's common dir, run from the
+// project root. A folder counts only when it holds a queue file.
+async function listed($: EngineInterface, dir: string) {
+  try {
+    const entries = await $.fs.list(dir)
+    return entries.some(e => e.kind === 'file' && QUEUE.test(e.name)) ? { dir, entries } : undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function queueEntries($: EngineInterface) {
+  const here = await listed($, 'queues')
+  if (here) return here
+  const root = await $.session.root().catch(() => undefined)
+  if (root) {
+    const cwd = await $.session.cwd().catch(() => undefined)
+    if (cwd !== root) {
+      const atRoot = await listed($, `${root}/queues`)
+      if (atRoot) return atRoot
+    }
+    let copy: Awaited<ReturnType<typeof $.vcs.detect>> | undefined
+    try {
+      copy = await $.vcs.detect({ path: root })
+    } catch {}
+    if (copy) {
+      const main = copy.mainRoot ?? copy.root
+      return main === root || main === cwd ? undefined : listed($, `${main}/queues`)
+    }
+  }
   try {
-    return { dir: 'queues', entries: await $.fs.list('queues') }
-  } catch {}
-  try {
-    const r = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
+    const r = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], root ? { cwd: root } : undefined)
     const common = r.stdout.trim()
     if (r.exitCode !== 0 || !common.endsWith('/.git')) return undefined
-    const dir = `${common.slice(0, -'/.git'.length)}/queues`
-    return { dir, entries: await $.fs.list(dir) }
+    return listed($, `${common.slice(0, -'/.git'.length)}/queues`)
   } catch {
     return undefined
   }
