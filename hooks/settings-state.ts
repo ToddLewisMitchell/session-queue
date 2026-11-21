@@ -38,9 +38,10 @@ export const SHOWN = [
 
 // Every setting as `name: value`, joined by ` · `: the prompt footer's text
 // (display.tsx) and `/queue`'s settings line (commands.ts), so the two read
-// the same.
+// the same. Commits reads as `commit` there, after its command.
+const LABEL: Partial<Record<keyof QueueSettings, string>> = { commits: 'commit' }
 export const summary = (s: QueueSettings) =>
-  SHOWN.map(([name, key]) => `${name.toLowerCase()}: ${key === 'autoAdvance' && s[key] !== 'off' ? `until ${s[key]} weekly` : s[key]}`).join(' · ')
+  SHOWN.map(([name, key]) => `${LABEL[key] ?? name.toLowerCase()}: ${key === 'autoAdvance' && s[key] !== 'off' ? `until ${s[key]} weekly` : s[key]}`).join(' · ')
 
 // What changed between two reads of the same queues, as toast lines
 // ("Parallels → auto"). A queue new to the list (the first read, a queue just

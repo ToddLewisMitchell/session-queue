@@ -32,7 +32,7 @@ async function footer($: any, modes: string[] = []) {
 }
 
 // The footer's settings: each one's value, missing ones at their defaults.
-const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commits: 'ask', clear: 'auto', 'auto-advance': 'off', notify: 'off' }
+const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commit: 'ask', clear: 'auto', 'auto-advance': 'off', notify: 'off' }
 const shown = (o: Partial<typeof DEFAULTS> = {}) =>
   Object.entries({ ...DEFAULTS, ...o })
     .map(([k, v]) => `${k}: ${v}`)
@@ -99,7 +99,7 @@ test('auto go-ahead and auto-commit show as auto', async ($, on) => {
     'queue-demo.md': '**Pace.** speed\n\n**Go-ahead.** auto (chosen 2026-11-19)\n\n**Commits.** auto (chosen 2026-11-19)\n',
   })
   await start($)
-  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto', 'go-ahead': 'auto', commits: 'auto' })}`)
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto', 'go-ahead': 'auto', commit: 'auto' })}`)
 })
 
 test('an older Commits approve reads as ask', async ($, on) => {
@@ -120,7 +120,7 @@ test('two queues with different settings are named', async ($, on) => {
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(await footer($)).toBe(`queue a · ${shown({ commits: 'auto' })} & queue b · ${shown()}`)
+  expect(await footer($)).toBe(`queue a · ${shown({ commit: 'auto' })} & queue b · ${shown()}`)
 })
 
 // --- Clear before next-session ---------------------------------------------

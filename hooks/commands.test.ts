@@ -64,7 +64,7 @@ test('the commands are registered at session start', async ($, on) => {
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commits: ask · clear: auto · auto-advance: off · notify: off')
+  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commit: ask · clear: auto · auto-advance: off · notify: off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')
