@@ -328,12 +328,15 @@ test('a topic path outside the queue folder is not read', async ($, on) => {
   expect(text).not.toContain('SECRET')
 })
 
-test('no open queue attaches nothing; other prompts get nothing', async ($, on) => {
+test('no open queue attaches only the skill name; other prompts get nothing', async ($, on) => {
   const { clock, context } = fakeSession(on, { 'queue-demo.md': 'Closed 2026-11-10, a record only.\n' }, { messages: 0 })
   await typed($, 'next-session')
   await typed($, 'hello')
   await clock.settle()
-  expect(context).toEqual([undefined, undefined])
+  expect(context).toHaveLength(2)
+  expect(context[0]?.join('\n')).toContain('`session-queue:session-queue`')
+  expect(context[0]?.join('\n')).not.toContain('<file')
+  expect(context[1]).toBeUndefined()
 })
 
 test('a queue file with Windows line endings still finds its topic file', async ($, on) => {

@@ -34,13 +34,25 @@ async function topicBlock($: EngineInterface, q: Queue) {
   }
 }
 
+// `next-session` is a keyword of the session-queue skill, not a skill of its
+// own: without this, the model's first try is Skill("next-session"), which
+// fails with "Unknown skill".
+const SKILL =
+  'This `next-session` is the session-queue skill\'s: load it with the Skill tool as ' +
+  '`session-queue:session-queue` (there is no `next-session` skill).'
+
 const NOTE =
   "Don't read them again to start; re-read one only to check it for changes (as when claiming the row) or " +
   'before editing it. If the row to run is another one, read its topic file yourself.'
 
-// The text to attach for `next-session [named]`, or undefined when there's no
-// open queue to attach (none, or the named one isn't open).
+// The text to attach for `next-session [named]`: which skill runs it, then
+// the open queue files (none when no queue is open, or the named one isn't).
 export async function queueContext($: EngineInterface, named: string | undefined) {
+  const files = await attachedFiles($, named).catch(() => undefined)
+  return files === undefined ? SKILL : `${SKILL}\n\n${files}`
+}
+
+async function attachedFiles($: EngineInterface, named: string | undefined) {
   const picked = pickQueues(await openQueues($), named)
   if (picked.length === 0) return undefined
   const queueFiles = picked.map(q => block(`${q.dir}/queue-${q.name}.md`, q.text))
