@@ -21,6 +21,11 @@ export function settingValue(text: string, name: string): string | undefined {
   return new RegExp(`^\\*\\*${escaped}\\.\\*\\*[ \\t]*([\\w-]+)`, 'mi').exec(text)?.[1]?.toLowerCase()
 }
 
+// Whether a Clear line's value turns the clear on: `on`, an older queue's
+// `auto`, or no line. Any other word (`off`, a typo) leaves it off, so a hand
+// edit never clears a conversation the user meant to keep.
+const clearOn = (v: string | undefined) => v === undefined || v === 'on' || v === 'auto'
+
 // Auto-advance's default weekly percentage, when the line says `on` alone.
 export const DEFAULT_PERCENT = 80
 
@@ -86,7 +91,7 @@ export function parseQueue(name: string, dir: string, text: string): Queue {
     parallels: parallels ?? 'ask',
     autoGoAhead: settingValue(text, 'Go-ahead') === 'auto',
     autoCommit: settingValue(text, 'Commits') === 'auto',
-    clear: settingValue(text, 'Clear') !== 'off',
+    clear: clearOn(settingValue(text, 'Clear')),
     notify: settingValue(text, 'Notify') === 'on',
     autoAdvance: advancePercent(text),
     waitsFor: WAITS.exec(text)?.[1],

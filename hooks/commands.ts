@@ -205,6 +205,17 @@ export function keptBy(queues: Queue[], s: Setting, value: string) {
 export const list = (xs: readonly string[]) =>
   xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')}, and ${xs.at(-1)}`
 
+// The settings a change turned on with it, each with the value it was set to,
+// grouped by value in `turnsOn` order: `Go-ahead and Commits to auto, and
+// Clear to on`.
+function alsoSet(s: Setting, names: readonly string[]) {
+  const groups = new Map<string, string[]>()
+  for (const [name, value] of s.turnsOn ?? []) if (names.includes(name)) groups.set(value, [...(groups.get(value) ?? []), name])
+  const parts = [...groups].map(([value, ns]) => `${list(ns)} to ${value}`)
+  // A comma before the last `and`, since a group has its own.
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}` : (parts[0] ?? '')
+}
+
 // The one queue a command acts on, or the reason there isn't one.
 function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
   const picked = pickQueues(queues, named)
@@ -387,7 +398,7 @@ export function commands(on: On) {
       const written = await writeSetting($, q, s, value, percent)
       if ('failed' in written) return { text: written.failed }
       const until = s.percent && value === 'on' ? ` until ${percent ?? q.autoAdvance ?? DEFAULT_PERCENT}% of the weekly usage limit` : ''
-      const also = written.also.length > 0 ? ` Also set ${list(written.also)} to auto.` : ''
+      const also = written.also.length > 0 ? ` Also set ${alsoSet(s, written.also)}.` : ''
       // Quiet: this reply reports the change, so no toast repeats it.
       await refresh($, { quiet: true }).catch(() => undefined)
       // Unnamed, only the active queue changed: say which waiting ones didn't,

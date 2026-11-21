@@ -226,6 +226,13 @@ test('a named queue decides alone', async ($, on) => {
   expect(calls).toEqual(['/clear', 'next-session b'])
 })
 
+test('a Clear word other than on or auto keeps the conversation', async ($, on) => {
+  const { clock, calls } = fakeSession(on, { 'queue-demo.md': '**Clear.** none\n' })
+  await typed($, 'next-session')
+  await clock.settle()
+  expect(calls).toEqual(['next-session'])
+})
+
 test('a running background agent blocks the clear', async ($, on) => {
   const { clock, calls } = fakeSession(on, QUEUE_ON, { agents: ['completed', 'running'] })
   await typed($, 'next-session')

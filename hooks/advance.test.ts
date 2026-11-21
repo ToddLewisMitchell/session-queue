@@ -210,3 +210,12 @@ test('/queue-autoadvance 70 turns it on with the three auto settings; off leaves
   await ($ as any).command.run({ command: 'queue-autoadvance', args: 'on' })
   expect(parseQueue('demo', 'queues', files['queue-demo.md']!).autoAdvance).toBe(80)
 })
+
+test('/queue-autoadvance with Clear off says each value it set', async ($, on) => {
+  const files: Record<string, string> = { 'queue-demo.md': queue(['| 1 | First | `d/one.md` | TODO | opus |'], '**Go-ahead.** ask\n\n**Commits.** ask\n\n**Clear.** off\n') }
+  fake(on, files, { weekly: 10 })
+  await start($)
+  const r = await ($ as any).command.run({ command: 'queue-autoadvance', args: '70%' })
+  expect(r.text).toBe('Queue demo: Auto-advance set to on until 70% of the weekly usage limit. Also set Go-ahead and Commits to auto, and Clear to on.')
+  expect(files['queue-demo.md']).toMatch(/^\*\*Clear\.\*\* on: /m)
+})
