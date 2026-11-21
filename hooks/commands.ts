@@ -76,10 +76,11 @@ export const SETTINGS: readonly Setting[] = [
   },
   {
     command: 'queue-autoclear',
-    description: 'Choose whether next-session clears the conversation first: auto (clear it), or off (keep it)',
+    description: 'Choose whether next-session clears the conversation first: off (keep it), or on (clear it)',
     name: 'Clear',
     section: GACC,
-    values: { auto: 'clear the conversation when I type next-session', off: '' },
+    values: { off: '', on: 'clear the conversation when I type next-session' },
+    older: { auto: 'on' },
   },
   {
     command: 'queue-autoadvance',
@@ -92,7 +93,7 @@ export const SETTINGS: readonly Setting[] = [
     turnsOn: [
       ['Go-ahead', 'auto'],
       ['Commits', 'auto'],
-      ['Clear', 'auto'],
+      ['Clear', 'on'],
     ],
   },
   {

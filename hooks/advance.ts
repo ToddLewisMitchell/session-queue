@@ -10,7 +10,7 @@ import { activeQueues, nextRowOf, openQueues, rows, type Queue, type Row } from 
 //
 // It goes on only when nothing needs the user, and otherwise says in a toast
 // why it stopped:
-// - Go-ahead, Commits, and Clear are all `auto` (turning auto-advance on with
+// - Go-ahead and Commits are `auto` and Clear `on` (turning auto-advance on with
 //   its command or the pane's button turns them on; turning one off later
 //   stops it);
 // - this conversation ran `next-session` (typed, or auto-advance's own), a
@@ -40,7 +40,7 @@ export function decide(q: Queue, before: readonly string[] | undefined, limits: 
   const percent = q.autoAdvance
   if (percent === undefined || before === undefined) return undefined
   if (!doneIds(q.text).some(id => !before.includes(id))) return undefined
-  if (!q.autoGoAhead || !q.autoCommit || !q.clear) return { stop: 'Go-ahead, Commits, and Clear must all be auto' }
+  if (!q.autoGoAhead || !q.autoCommit || !q.clear) return { stop: 'Go-ahead and Commits must be auto, and Clear on' }
   const all = rows(q.text)
   const running = all.find(r => /^IN PROGRESS\b/i.test(r.status))
   if (running) return { stop: `${running.id} is still in progress` }

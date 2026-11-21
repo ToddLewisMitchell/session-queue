@@ -18,7 +18,7 @@
 
 **Commits.** <ask | auto: commit and merge without waiting when the Checks and review pass> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 
-**Clear.** <auto: clear the conversation when I type next-session | off> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
+**Clear.** <on: clear the conversation when I type next-session | off> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 
 **Notify.** <off | on: push a notification when a session stops for my decision or approval> (chosen <date>; see the skill's Notifications section).
 

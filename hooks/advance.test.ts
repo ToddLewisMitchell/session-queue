@@ -174,7 +174,7 @@ test('decide: each stop', () => {
   expect(stopOf(decide(q(FINISHED), undefined, WEEKLY(10), opus))).toBe(undefined) // no baseline
   expect(stopOf(decide(q(FINISHED.replace('**Auto-advance.** on', '**Auto-advance.** off')), [], WEEKLY(10), opus))).toBe(undefined)
   expect(stopOf(decide(q(FINISHED.replace('**Commits.** auto', '**Commits.** approve')), [], WEEKLY(10), opus))).toBe(
-    'Go-ahead, Commits, and Clear must all be auto',
+    'Go-ahead and Commits must be auto, and Clear on',
   )
   expect(stopOf(decide(q(FINISHED), [], [], opus))).toBe('no weekly usage reading')
   expect(stopOf(decide(q(FINISHED), [], [...WEEKLY(10), { kind: 'five_hour', percentUsed: 92 }], opus))).toBe('five-hour usage is at 92%')

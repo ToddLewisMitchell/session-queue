@@ -64,7 +64,7 @@ test('the commands are registered at session start', async ($, on) => {
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commit: ask · clear: auto · auto-advance: off · notify: off')
+  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commit: ask · auto-clear: on · auto-advance: off · notify: off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')
@@ -109,8 +109,8 @@ test('a missing line goes where the template puts it', async ($, on) => {
 test('a bad value, an extra word, or an unnamed second queue writes nothing', async ($, on) => {
   const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-b.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-autoclear', 'maybe a')).text).toBe('Usage: /queue-autoclear <auto|off> [queue]')
-  expect((await run($, 'queue-autoclear', 'off a b')).text).toBe('Usage: /queue-autoclear <auto|off> [queue]')
+  expect((await run($, 'queue-autoclear', 'maybe a')).text).toBe('Usage: /queue-autoclear <off|on> [queue]')
+  expect((await run($, 'queue-autoclear', 'off a b')).text).toBe('Usage: /queue-autoclear <off|on> [queue]')
   expect((await run($, 'queue-autoclear', 'off')).text).toBe('Two or more queues are active; name one: a, b.')
   expect(files['queue-a.md']).toBe(QUEUE)
   expect(files['queue-b.md']).toBe(QUEUE)
@@ -152,7 +152,7 @@ test('an inherited key is not a value', async ($, on) => {
 test('a queue named like a value is still named', async ($, on) => {
   const files: Record<string, string> = { 'queue-auto.md': QUEUE, 'queue-b.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-autoclear', 'auto auto')).text).toBe('Queue auto: Clear set to auto.')
+  expect((await run($, 'queue-commit', 'auto auto')).text).toBe('Queue auto: Commits set to auto.')
   expect(files['queue-b.md']).toBe(QUEUE)
 })
 

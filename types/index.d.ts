@@ -13,7 +13,7 @@ export type QueueSettings = {
   parallels: 'off' | 'ask' | 'auto'
   goAhead: 'ask' | 'auto'
   commits: 'ask' | 'auto'
-  clear: 'auto' | 'off'
+  clear: 'on' | 'off'
   notify: 'on' | 'off'
   // `off`, or the weekly percentage it runs until (`80%`).
   autoAdvance: string

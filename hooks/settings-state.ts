@@ -11,7 +11,7 @@ import { activeQueues, type Queue } from './queues'
 
 // Change a tag when its value's fields change: a reload keeps what the old
 // code stored, and the tag declines it.
-const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-3' })
+const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-4' })
 const autoCommits = atom({ plugin: 'session-queue', key: 'autoCommits' } as const, [], { shape: 'auto-commits-1' })
 // Enough for a long session's commits; older rows lose their note.
 const AUTO_COMMITS_KEPT = 50
@@ -21,7 +21,7 @@ export const settingsOf = (q: Queue): QueueSettings => ({
   parallels: q.parallels,
   goAhead: q.autoGoAhead ? 'auto' : 'ask',
   commits: q.autoCommit ? 'auto' : 'ask',
-  clear: q.clear ? 'auto' : 'off',
+  clear: q.clear ? 'on' : 'off',
   notify: q.notify ? 'on' : 'off',
   autoAdvance: q.autoAdvance === undefined ? 'off' : `${q.autoAdvance}%`,
 })
@@ -38,8 +38,9 @@ export const SHOWN = [
 
 // Every setting as `name: value`, joined by ` · `: the prompt footer's text
 // (display.tsx) and `/queue`'s settings line (commands.ts), so the two read
-// the same. Commits reads as `commit` there, after its command.
-const LABEL: Partial<Record<keyof QueueSettings, string>> = { commits: 'commit' }
+// the same. Commits and Clear read as `commit` and `auto-clear` there, after
+// their commands.
+const LABEL: Partial<Record<keyof QueueSettings, string>> = { commits: 'commit', clear: 'auto-clear' }
 export const summary = (s: QueueSettings) =>
   SHOWN.map(([name, key]) => `${LABEL[key] ?? name.toLowerCase()}: ${key === 'autoAdvance' && s[key] !== 'off' ? `until ${s[key]} weekly` : s[key]}`).join(' · ')
 

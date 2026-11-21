@@ -49,7 +49,7 @@ test('the footer keeps its own modes and adds the queue settings', async ($, on:
   const { seen } = fake(on, { 'queue-demo.md': QUEUE })
   await start($)
   const ui = await $.ui.mount({ plugin: 'session-queue', component: 'SessionMode', surface: 'desktop', props: { modes: ['focus'] } })
-  expect(seen.modes).toEqual(['focus', 'queue · parallels: off · go-ahead: ask · commit: auto · clear: auto · auto-advance: off · notify: off'])
+  expect(seen.modes).toEqual(['focus', 'queue · parallels: off · go-ahead: ask · commit: auto · auto-clear: on · auto-advance: off · notify: off'])
   await ui.unmount()
 })
 
@@ -58,7 +58,7 @@ test('the phone gets the settings at the end of the hint line; the terminal keep
   await start($)
   const props = { hint: '? for shortcuts', isDraft: false, isWorking: false }
   const phone = await $.ui.mount({ plugin: 'session-queue', component: 'PromptHint', surface: 'mobile', props })
-  expect(seen.hint).toBe('? for shortcuts · queue · parallels: off · go-ahead: ask · commit: auto · clear: auto · auto-advance: off · notify: off')
+  expect(seen.hint).toBe('? for shortcuts · queue · parallels: off · go-ahead: ask · commit: auto · auto-clear: on · auto-advance: off · notify: off')
   await phone.unmount()
   const terminal = await $.ui.mount({ plugin: 'session-queue', component: 'PromptHint', surface: 'terminal', props })
   expect(seen.hint).toBe('? for shortcuts')
@@ -136,7 +136,7 @@ test('the pane shows a button per setting; a press moves it on and writes the li
     'Parallels: off',
     'Go-ahead: ask',
     'Commits: auto',
-    'Clear: auto',
+    'Clear: on',
     'Auto-advance: off',
     'Notify: off',
   ])

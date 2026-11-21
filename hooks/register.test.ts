@@ -32,7 +32,7 @@ async function footer($: any, modes: string[] = []) {
 }
 
 // The footer's settings: each one's value, missing ones at their defaults.
-const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commit: 'ask', clear: 'auto', 'auto-advance': 'off', notify: 'off' }
+const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commit: 'ask', 'auto-clear': 'on', 'auto-advance': 'off', notify: 'off' }
 const shown = (o: Partial<typeof DEFAULTS> = {}) =>
   Object.entries({ ...DEFAULTS, ...o })
     .map(([k, v]) => `${k}: ${v}`)
