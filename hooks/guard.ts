@@ -361,7 +361,7 @@ export function guard(on: On) {
       const asks = active.some(q => !q.autoCommit)
       if (asks && !(await read($, approved))) {
         const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
-        return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is approve. Allow this ${what}?` }
+        return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is ask. Allow this ${what}?` }
       }
       // For the note on the call's row (display.tsx).
       if (!asks && active.length > 0 && e.tool_use_id !== undefined) await noteAutoCommit($, e.tool_use_id).catch(() => undefined)

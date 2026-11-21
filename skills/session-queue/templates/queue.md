@@ -16,7 +16,7 @@
 
 **Go-ahead.** <ask | auto: start building without waiting when there's nothing to decide> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 
-**Commits.** <approve | auto: commit and merge without waiting when the Checks and review pass> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
+**Commits.** <ask | auto: commit and merge without waiting when the Checks and review pass> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 
 **Clear.** <auto: clear the conversation when I type next-session | off> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
 

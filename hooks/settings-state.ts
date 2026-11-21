@@ -11,7 +11,7 @@ import { activeQueues, type Queue } from './queues'
 
 // Change a tag when its value's fields change: a reload keeps what the old
 // code stored, and the tag declines it.
-const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-2' })
+const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-3' })
 const autoCommits = atom({ plugin: 'session-queue', key: 'autoCommits' } as const, [], { shape: 'auto-commits-1' })
 // Enough for a long session's commits; older rows lose their note.
 const AUTO_COMMITS_KEPT = 50
@@ -20,7 +20,7 @@ export const settingsOf = (q: Queue): QueueSettings => ({
   name: q.name,
   parallels: q.parallels,
   goAhead: q.autoGoAhead ? 'auto' : 'ask',
-  commits: q.autoCommit ? 'auto' : 'approve',
+  commits: q.autoCommit ? 'auto' : 'ask',
   clear: q.clear ? 'auto' : 'off',
   notify: q.notify ? 'on' : 'off',
   autoAdvance: q.autoAdvance === undefined ? 'off' : `${q.autoAdvance}%`,
@@ -35,6 +35,12 @@ export const SHOWN = [
   ['Auto-advance', 'autoAdvance'],
   ['Notify', 'notify'],
 ] as const
+
+// Every setting as `name: value`, joined by ` · `: the prompt footer's text
+// (display.tsx) and `/queue`'s settings line (commands.ts), so the two read
+// the same.
+export const summary = (s: QueueSettings) =>
+  SHOWN.map(([name, key]) => `${name.toLowerCase()}: ${key === 'autoAdvance' && s[key] !== 'off' ? `until ${s[key]} weekly` : s[key]}`).join(' · ')
 
 // What changed between two reads of the same queues, as toast lines
 // ("Parallels → auto"). A queue new to the list (the first read, a queue just

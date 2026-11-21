@@ -1,14 +1,14 @@
 import type { On } from 'claude-code'
 import type { QueueSettings } from '../types'
 import { gitActions } from './guard'
-import { isAutoCommit, settingsNow } from './settings-state'
+import { isAutoCommit, settingsNow, summary } from './settings-state'
 
 // The settings shown beside the chat, from the values `refresh` (status.ts)
 // keeps in `$.state`:
 // - In the prompt footer's mode labels (`SessionMode`, terminal and desktop):
-//   each active queue's Parallels setting, plus `auto go-ahead`,
-//   `auto-commit`, and `auto-advance to <P>%` when those are on, so the user
-//   always knows how much runs without asking them.
+//   every setting of each active queue, `queue · parallels: ask · go-ahead:
+//   auto · …`, so the user always knows how much runs without asking them
+//   (a separator after `queue`, so each setting keeps its own colon).
 // - On the phone, where the footer isn't drawn, the same at the end of the
 //   hint line under the prompt (`PromptHint`).
 // - Under a Bash row that committed or merged because Commits is `auto` (the
@@ -16,23 +16,13 @@ import { isAutoCommit, settingsNow } from './settings-state'
 // The queue pane's settings buttons are in pane.tsx; the toast on a change is
 // `refresh`'s.
 
-const one = (s: QueueSettings) =>
-  [
-    `parallels ${s.parallels === 'auto' ? '⚡ auto' : s.parallels}`,
-    s.goAhead === 'auto' ? 'auto go-ahead' : '',
-    s.commits === 'auto' ? 'auto-commit' : '',
-    s.autoAdvance !== 'off' ? `auto-advance to ${s.autoAdvance}` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
-
 // The labels for the active queues: one when they all read the same, else
 // one per queue, by name.
 export function footerLabels(list: readonly QueueSettings[]): string[] {
   if (list.length === 0) return []
-  const each = list.map(one)
-  if (new Set(each).size === 1) return [`queue: ${each[0]}`]
-  return list.map((s, i) => `queue ${s.name}: ${each[i]}`)
+  const each = list.map(summary)
+  if (new Set(each).size === 1) return [`queue · ${each[0]}`]
+  return list.map((s, i) => `queue ${s.name} · ${each[i]}`)
 }
 
 function commandOf(input: unknown) {

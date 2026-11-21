@@ -31,22 +31,29 @@ async function footer($: any, modes: string[] = []) {
   return seen.join(' & ')
 }
 
-test('auto shows a flag', async ($, on) => {
+// The footer's settings: each one's value, missing ones at their defaults.
+const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commits: 'ask', clear: 'auto', 'auto-advance': 'off', notify: 'off' }
+const shown = (o: Partial<typeof DEFAULTS> = {}) =>
+  Object.entries({ ...DEFAULTS, ...o })
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(' · ')
+
+test('every setting shows, missing ones at their defaults', async ($, on) => {
   fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Parallels.** auto (chosen 2026-11-13).\n' })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ⚡ auto')
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto' })}`)
 })
 
 test('an older Pace line reads as Parallels; a Parallels line wins over it', async ($, on) => {
   fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
   await start($)
-  expect(await footer($)).toBe('queue a: parallels off & queue b: parallels ask')
+  expect(await footer($)).toBe(`queue a · ${shown({ parallels: 'off' })} & queue b · ${shown()}`)
 })
 
 test('a missing Parallels line is ask', async ($, on) => {
   fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ask')
+  expect(await footer($)).toBe(`queue · ${shown()}`)
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
@@ -56,7 +63,7 @@ test('a closed queue is ignored; its successor counts', async ($, on) => {
     'notes.md': '**Pace.** speed\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue: parallels off')
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'off' })}`)
 })
 
 test('a row that mentions closing a record stays open', async ($, on) => {
@@ -64,7 +71,7 @@ test('a row that mentions closing a record stays open', async ($, on) => {
     'queue-demo.md': '# Demo\n\n**Pace.** speed\n\n| 3 | Archive | `d/a.md` | **DONE 2026-11-12** (closed the old log, a record only) | opus |\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ⚡ auto')
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto' })}`)
 })
 
 test('two queues on different Parallels settings are named', async ($, on) => {
@@ -73,7 +80,7 @@ test('two queues on different Parallels settings are named', async ($, on) => {
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue a: parallels ⚡ auto & queue b: parallels ask')
+  expect(await footer($)).toBe(`queue a · ${shown({ parallels: 'auto' })} & queue b · ${shown()}`)
 })
 
 test('no queue folder: the old status line is cleared and the footer is left alone', async ($, on) => {
@@ -87,18 +94,24 @@ test('no queue folder: the old status line is cleared and the footer is left alo
   expect(await footer($, ['focus'])).toBe('focus')
 })
 
-test('auto go-ahead and auto-commit join the flag', async ($, on) => {
+test('auto go-ahead and auto-commit show as auto', async ($, on) => {
   fakeQueues(on, {
     'queue-demo.md': '**Pace.** speed\n\n**Go-ahead.** auto (chosen 2026-11-19)\n\n**Commits.** auto (chosen 2026-11-19)\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ⚡ auto · auto go-ahead · auto-commit')
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto', 'go-ahead': 'auto', commits: 'auto' })}`)
 })
 
-test('ask and approve add nothing', async ($, on) => {
+test('an older Commits approve reads as ask', async ($, on) => {
   fakeQueues(on, { 'queue-demo.md': '**Go-ahead.** ask\n\n**Commits.** approve\n' })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ask')
+  expect(await footer($)).toBe(`queue · ${shown()}`)
+})
+
+test('auto-advance shows the weekly share it runs until', async ($, on) => {
+  fakeQueues(on, { 'queue-demo.md': '**Auto-advance.** on: until 70% of the weekly usage limit (chosen 2026-11-20).\n' })
+  await start($)
+  expect(await footer($)).toBe(`queue · ${shown({ 'auto-advance': 'until 70% weekly' })}`)
 })
 
 test('two queues with different settings are named', async ($, on) => {
@@ -107,7 +120,7 @@ test('two queues with different settings are named', async ($, on) => {
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue a: parallels ask · auto-commit & queue b: parallels ask')
+  expect(await footer($)).toBe(`queue a · ${shown({ commits: 'auto' })} & queue b · ${shown()}`)
 })
 
 // --- Clear before next-session ---------------------------------------------
@@ -295,7 +308,7 @@ test('a waiting queue is not in the footer', async ($, on) => {
     'queue-b.md': 'Waits for `queue-a.md`.\n\n**Pace.** speed\n',
   })
   await start($)
-  expect(await footer($)).toBe('queue: parallels ask')
+  expect(await footer($)).toBe(`queue · ${shown()}`)
 })
 
 test('a topic path outside the queue folder is not read', async ($, on) => {

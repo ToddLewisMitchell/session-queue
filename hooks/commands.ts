@@ -1,4 +1,5 @@
 import type { EngineInterface, On } from 'claude-code'
+import { settingsOf, summary } from './settings-state'
 import { refresh } from './status'
 import {
   activeQueues,
@@ -41,6 +42,8 @@ export type Setting = {
   percent?: true
   // Settings a change to `on` turns on too (Auto-advance needs all three).
   turnsOn?: readonly (readonly [name: string, value: string])[]
+  // Older values still found in queue files, and the value each reads as.
+  older?: Record<string, string>
 }
 
 const GACC = 'Go-ahead, Commits, and Clear'
@@ -61,11 +64,12 @@ export const SETTINGS: readonly Setting[] = [
     values: { ask: '', auto: "start building without waiting when there's nothing to decide" },
   },
   {
-    command: 'queue-autocommit',
-    description: 'Choose whether a session commits on its own: approve (wait for your approval), or auto (commit when the checks and review pass)',
+    command: 'queue-commit',
+    description: 'Choose whether a session commits on its own: ask (wait for your approval), or auto (commit when the checks and review pass)',
     name: 'Commits',
     section: GACC,
-    values: { approve: '', auto: 'commit and merge without waiting when the Checks and review pass' },
+    values: { ask: '', auto: 'commit and merge without waiting when the Checks and review pass' },
+    older: { approve: 'ask' },
   },
   {
     command: 'queue-autoclear',
@@ -100,6 +104,15 @@ export const SETTINGS: readonly Setting[] = [
 // The settings lines in the template's order, for placing a missing one. `Pace`
 // is the older name of the Parallels line, still found in older queues.
 const ORDER = ['Branching', 'Parallels', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Auto-advance', 'Notify']
+
+// The value a queue's line gives the setting named `name`, an older value
+// read as its new one (`approve` as `ask`), so comparing with a value from the
+// command doesn't take an old line for a different setting.
+export function currentValue(text: string, name: string) {
+  const v = settingValue(text, name)
+  const older = SETTINGS.find(s => s.name === name)?.older
+  return v !== undefined && older && Object.hasOwn(older, v) ? older[v] : v
+}
 
 // `[^\\r\\n]*` rather than `.*`, so a Windows line ending stays.
 const lineOf = (name: string) => new RegExp(`^\\*\\*${name}\\.\\*\\*[^\\r\\n]*`, 'mi')
@@ -164,7 +177,7 @@ export async function writeSetting(
     if (on)
       for (const [name, value] of s.turnsOn ?? []) {
         const t = SETTINGS.find(x => x.name === name)
-        if (!t || settingValue(text, name) === value) continue
+        if (!t || currentValue(text, name) === value) continue
         text = setLine(text, t, value, date)
         also.push(name)
       }
@@ -179,7 +192,7 @@ export async function writeSetting(
 // (empty when none): a queue that copied these settings isn't left behind
 // unseen.
 export function keptBy(queues: Queue[], s: Setting, value: string) {
-  const waiting = queues.filter(o => isWaiting(o, queues) && settingValue(o.text, s.name) !== value)
+  const waiting = queues.filter(o => isWaiting(o, queues) && currentValue(o.text, s.name) !== value)
   if (waiting.length === 0) return ''
   return `Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
 }
@@ -198,21 +211,11 @@ function oneQueue(queues: Queue[], named: string | undefined): Queue | string {
   return `Two or more queues are active; name one: ${picked.map(q => q.name).join(', ')}.`
 }
 
-const settingsSummary = (q: Queue) =>
-  [
-    `parallels ${q.parallels}`,
-    `go-ahead ${q.autoGoAhead ? 'auto' : 'ask'}`,
-    `commits ${q.autoCommit ? 'auto' : 'approve'}`,
-    `clear ${q.clear ? 'auto' : 'off'}`,
-    `auto-advance ${q.autoAdvance === undefined ? 'off' : `until ${q.autoAdvance}% weekly`}`,
-    `notify ${q.notify ? 'on' : 'off'}`,
-  ].join(' · ')
-
 // The `/queue` view of one queue; `waitsFor`, the open queue it waits for.
 export function view(q: Queue, waitsFor?: Queue) {
   const open = rows(q.text).filter(isOpen)
   const next = nextRow(q.text)
-  const lines = [`Queue ${q.name}: ${settingsSummary(q)}`]
+  const lines = [`Queue ${q.name} · ${summary(settingsOf(q))}`]
   if (waitsFor) lines.push(`Waits for queue ${waitsFor.name}: next-session runs it once that queue closes`)
   else lines.push(next ? `next-session runs ${next.id} (${next.session}) on ${next.model || 'the current model'}` : 'next-session: no runnable row')
   if (open.length === 0) lines.push('No open rows.')
@@ -271,8 +274,8 @@ export function commands(on: On) {
       const queues = await openQueues($)
       const q = oneQueue(queues, rest[0])
       if (typeof q === 'string') return { text: q }
-      const same = settingValue(q.text, s.name) === value && (percent === undefined || percent === q.autoAdvance)
-      const needs = value === 'on' ? (s.turnsOn ?? []).filter(([n, v]) => settingValue(q.text, n) !== v) : []
+      const same = currentValue(q.text, s.name) === value && (percent === undefined || percent === q.autoAdvance)
+      const needs = value === 'on' ? (s.turnsOn ?? []).filter(([n, v]) => currentValue(q.text, n) !== v) : []
       if (same && needs.length === 0) return { text: `Queue ${q.name}: ${s.name} is already ${value}.` }
       const written = await writeSetting($, q, s, value, percent)
       if ('failed' in written) return { text: written.failed }

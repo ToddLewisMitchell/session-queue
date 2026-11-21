@@ -49,7 +49,7 @@ test('the footer keeps its own modes and adds the queue settings', async ($, on:
   const { seen } = fake(on, { 'queue-demo.md': QUEUE })
   await start($)
   const ui = await $.ui.mount({ plugin: 'session-queue', component: 'SessionMode', surface: 'desktop', props: { modes: ['focus'] } })
-  expect(seen.modes).toEqual(['focus', 'queue: parallels off · auto-commit'])
+  expect(seen.modes).toEqual(['focus', 'queue · parallels: off · go-ahead: ask · commits: auto · clear: auto · auto-advance: off · notify: off'])
   await ui.unmount()
 })
 
@@ -58,7 +58,7 @@ test('the phone gets the settings at the end of the hint line; the terminal keep
   await start($)
   const props = { hint: '? for shortcuts', isDraft: false, isWorking: false }
   const phone = await $.ui.mount({ plugin: 'session-queue', component: 'PromptHint', surface: 'mobile', props })
-  expect(seen.hint).toBe('? for shortcuts · queue: parallels off · auto-commit')
+  expect(seen.hint).toBe('? for shortcuts · queue · parallels: off · go-ahead: ask · commits: auto · clear: auto · auto-advance: off · notify: off')
   await phone.unmount()
   const terminal = await $.ui.mount({ plugin: 'session-queue', component: 'PromptHint', surface: 'terminal', props })
   expect(seen.hint).toBe('? for shortcuts')
@@ -74,8 +74,8 @@ test('a hand edit shows a toast after the turn; the first read and a quiet comma
   await turn($)
   expect(toasts).toEqual(['Parallels → auto'])
   // The command's own reply says what changed, so no toast repeats it.
-  const { text } = await ($ as any).command.run({ command: 'queue-autocommit', args: 'approve' })
-  expect(text).toBe('Queue demo: Commits set to approve.')
+  const { text } = await ($ as any).command.run({ command: 'queue-commit', args: 'ask' })
+  expect(text).toBe('Queue demo: Commits set to ask.')
   expect(toasts).toEqual(['Parallels → auto'])
 })
 
@@ -83,9 +83,9 @@ test('two queues name the queue in the toast', async ($, on: any) => {
   const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-b.md': QUEUE }
   const { toasts } = fake(on, files)
   await start($)
-  files['queue-b.md'] = QUEUE.replace('**Commits.** auto', '**Commits.** approve')
+  files['queue-b.md'] = QUEUE.replace('**Commits.** auto', '**Commits.** ask')
   await turn($)
-  expect(toasts).toEqual(['b: Commits → approve'])
+  expect(toasts).toEqual(['b: Commits → ask'])
 })
 
 const toolUse = (id: string, command: string, more: object = {}) =>
@@ -111,8 +111,8 @@ test('a commit let through by Commits auto gets a note on its row', async ($, on
   }
 })
 
-test('a commit under Commits approve gets no note', async ($, on: any) => {
-  fake(on, { 'queue-demo.md': QUEUE.replace('**Commits.** auto', '**Commits.** approve') })
+test('a commit under Commits ask gets no note', async ($, on: any) => {
+  fake(on, { 'queue-demo.md': QUEUE.replace('**Commits.** auto', '**Commits.** ask') })
   await ($ as any).tool.check({ tool: 'Bash', input: { command: 'git merge q/1' }, tool_use_id: 'tu3' })
   const row = await $.ui.mount(toolUse('tu3', 'git merge q/1'))
   expect(await row.find({ type: 'Text', text: /without the queue asking/ })).toBeUndefined()
@@ -144,9 +144,9 @@ test('the pane shows a button per setting; a press moves it on and writes the li
   expect(files['queue-demo.md']).toMatch(/^\*\*Parallels\.\*\* ask \(chosen \d{4}-\d\d-\d\d; see the skill's Parallels section\)\.$/m)
   expect(toasts).toEqual(['Parallels → ask'])
   expect((await ui.find({ type: 'Button', key: 'demo/Parallels' }))?.text).toBe('Parallels: ask')
-  // Commits: auto comes round to approve.
+  // Commits: auto comes round to ask.
   await ui.press({ key: 'demo/Commits' })
-  expect(files['queue-demo.md']).toContain('**Commits.** approve (chosen')
+  expect(files['queue-demo.md']).toContain('**Commits.** ask (chosen')
   await ui.unmount()
 })
 

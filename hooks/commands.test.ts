@@ -58,13 +58,13 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-autocommit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-commit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo: parallels off · go-ahead ask · commits approve · clear auto · auto-advance off · notify off')
+  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commits: ask · clear: auto · auto-advance: off · notify: off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')
@@ -74,10 +74,10 @@ test('/queue shows the open rows, the next row, and the settings', async ($, on)
 
 test('/queue with two queues shows both, or the one named in any case', async ($, on) => {
   fakeFolder(on, { 'queue-a.md': QUEUE, 'queue-b.md': '**Parallels.** auto\n' })
-  expect((await run($, 'queue')).text).toContain('Queue b: parallels auto')
+  expect((await run($, 'queue')).text).toContain('Queue b · parallels: auto')
   const one = (await run($, 'queue', 'A')).text
-  expect(one).toContain('Queue a:')
-  expect(one).not.toContain('Queue b:')
+  expect(one).toContain('Queue a ·')
+  expect(one).not.toContain('Queue b ·')
   expect((await run($, 'queue', 'c')).text).toBe('No open queue named c. Open: a, b.')
 })
 
@@ -121,9 +121,12 @@ test('a bad value, an extra word, or an unnamed second queue writes nothing', as
 test('the same value again changes nothing', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-autocommit', 'approve')).text).toBe('Queue demo: Commits is already approve.')
-  expect(files['queue-demo.md']).toBe(QUEUE)
+  await run($, 'queue-commit', 'auto')
+  const once = files['queue-demo.md']
+  expect((await run($, 'queue-commit', 'auto')).text).toBe('Queue demo: Commits is already auto.')
+  expect(files['queue-demo.md']).toBe(once)
 })
+
 
 test('setLine with no settings lines goes before the first heading, or at the end', () => {
   const parallels = SETTINGS[0]!
@@ -198,6 +201,20 @@ test('nextRow: ids after "before" or a ";" in an after status do not block', () 
 
 const WAITING = QUEUE.replace('# Demo queue\n', '# Later queue\n\nWaits for `queue-a.md`: starts when it closes.\n')
 
+test('/queue-commit takes ask or auto; an older approve line already reads as ask', async ($, on) => {
+  // Both on `approve`; later waits for a.
+  const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-later.md': WAITING }
+  fakeFolder(on, files)
+  expect((await run($, 'queue-commit', 'approve')).text).toBe('Usage: /queue-commit <ask|auto> [queue]')
+  expect((await run($, 'queue-commit', 'ask')).text).toBe('Queue a: Commits is already ask.')
+  expect(files['queue-a.md']).toBe(QUEUE)
+  // A waiting queue on approve isn't named as left behind by a change to ask.
+  await run($, 'queue-commit', 'auto')
+  expect((await run($, 'queue-commit', 'ask')).text).toBe('Queue a: Commits set to ask.')
+  expect(files['queue-a.md']).toMatch(/^\*\*Commits\.\*\* ask \(chosen \d{4}-\d\d-\d\d; see the skill's Go-ahead, Commits, and Clear section\)\.$/m)
+  expect(files['queue-later.md']).toBe(WAITING)
+})
+
 test('a waiting queue is not active: commands unnamed act on the active one', async ($, on) => {
   const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-later.md': WAITING }
   fakeFolder(on, files)
@@ -206,13 +223,13 @@ test('a waiting queue is not active: commands unnamed act on the active one', as
   )
   expect(files['queue-later.md']).toBe(WAITING)
   // Named, the waiting queue still changes.
-  expect((await run($, 'queue-autocommit', 'auto later')).text).toBe('Queue later: Commits set to auto.')
+  expect((await run($, 'queue-commit', 'auto later')).text).toBe('Queue later: Commits set to auto.')
 })
 
 test('/queue shows the waiting queue after the active one, without a next row', async ($, on) => {
   fakeFolder(on, { 'queue-later.md': WAITING, 'queue-a.md': QUEUE })
   const text = (await run($, 'queue')).text
-  expect(text.indexOf('Queue a:') < text.indexOf('Queue later:')).toBe(true)
+  expect(text.indexOf('Queue a ·') < text.indexOf('Queue later ·')).toBe(true)
   expect(text).toContain('Waits for queue a: next-session runs it once that queue closes')
   expect(text.match(/next-session runs 4/g)?.length).toBe(1)
 })
@@ -239,5 +256,5 @@ test('the commands describe what they choose', async ($, on) => {
   const { described } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   for (const s of SETTINGS) expect(described[s.command]).not.toContain('line')
-  expect(described['queue-autocommit']).toContain('commits on its own')
+  expect(described['queue-commit']).toContain('commits on its own')
 })
