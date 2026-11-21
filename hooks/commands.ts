@@ -4,6 +4,7 @@ import { refresh } from './status'
 import {
   activeQueues,
   advancePercent,
+  afterIds,
   DEFAULT_PERCENT,
   isOpen,
   isWaiting,
@@ -24,6 +25,8 @@ import {
 //   template's form with today's date, keeping the old line's own notes after
 //   `(chosen <date>;` (a targeted line replacement, Principle 6). A missing
 //   line is added where the template puts it.
+// - `/queue-remove <id> [name]`: deletes one row from the session table
+//   (`removeRow`), leaving its topic file on disk. The name may come first.
 // The queue name is needed only with two active queues (a queue waiting for
 // another isn't active); it and the value may come in either order, in any case.
 
@@ -223,11 +226,68 @@ export function view(q: Queue, waitsFor?: Queue) {
   return lines.join('\n')
 }
 
+// A table line, from the start of the line through its line ending, and the
+// session table's header (`| # | Session | ...`).
+const ROW_LINE = /^\|[^\n]*(?:\n|$)/gm
+const HEADER = /^\|\s*#\s*\|\s*Session\s*\|/i
+
+// The queue text with row `id` deleted from the session table (`/queue-remove`),
+// or why it wasn't. The user's decision (topic mod/queue-remove.md, 2026-11-21):
+// the row goes outright rather than being marked DROPPED, unlike the skill's
+// Dropping rule; an IN PROGRESS row is refused, since its session holds it.
+// The id matches exactly, else without regard to case when that finds one row.
+// `others` are the open rows whose Status names the id (`TODO (after X)`,
+// `TODO (folded into X, pending)`), and `notes` says whether the lines outside
+// the table seem to (`Session X`, `Sessions 6 and X`), for the user to fix.
+export function removeRow(text: string, id: string) {
+  // Only the session table: the `|` lines in a run from its header (every
+  // table line, if there's no header), so a row of another table isn't taken.
+  const all = [...text.matchAll(ROW_LINE)]
+  const start = all.findIndex(m => HEADER.test(m[0]))
+  let table = all
+  if (start >= 0) {
+    let end = start + 1
+    while (end < all.length && all[end]!.index === all[end - 1]!.index + all[end - 1]![0].length) end++
+    table = all.slice(start, end)
+  }
+  const lines = table.flatMap(m => {
+    const row = rows(m[0])[0]
+    return row ? [{ row, at: m.index, length: m[0].length }] : []
+  })
+  let found = lines.filter(l => l.row.id === id)
+  if (found.length === 0) found = lines.filter(l => l.row.id.toLowerCase() === id.toLowerCase())
+  if (found.length === 0) return { error: 'unknown' as const }
+  if (found.length > 1) return { error: 'duplicate' as const }
+  const { row, at, length } = found[0]!
+  if (/^IN PROGRESS\b/i.test(row.status)) {
+    // `IN PROGRESS <date> (<stage>; <session>)`: the session is the last part.
+    const parts = /\(([^)]*)\)\s*$/.exec(row.status)?.[1]?.split(';') ?? []
+    return { error: 'running' as const, row, session: parts.length > 1 ? parts.at(-1)!.trim() : undefined }
+  }
+  const same = (x: string) => x.toLowerCase() === row.id.toLowerCase()
+  const folded = (status: string) => /^TODO\s*\(folded into\s+([\w.-]+)/i.exec(status)?.[1]
+  const others = lines
+    .map(l => l.row)
+    .filter(r => r !== row && isOpen(r) && (afterIds(r.status).some(same) || same(folded(r.status) ?? '')))
+  const escaped = row.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const mention = new RegExp(`\\b(?:sessions?|rows?)\\s+(?:[\\w.-]+(?:,\\s*(?:and\\s+)?|\\s+and\\s+|\\s*[–—-]\\s*))*${escaped}(?![\\w.-])`, 'i')
+  const rest = text.slice(0, at) + text.slice(at + length)
+  const notes = rest.split('\n').some(line => !line.startsWith('|') && mention.test(line))
+  return { text: rest, row, others, notes }
+}
+
 // Declares the commands; called from register.ts's own `session.start` hook
 // (the engine takes one unmatched hook per event).
 export async function registerCommands($: EngineInterface) {
   await $.command
     .register({ name: 'queue', description: 'Show the open queue: its rows, what next-session runs, and its settings', argumentHint: '[queue]' })
+    .catch(() => undefined)
+  await $.command
+    .register({
+      name: 'queue-remove',
+      description: "Delete a row from the queue's session table by its id (its topic file stays); a running row can't be removed",
+      argumentHint: '<id> [queue]',
+    })
     .catch(() => undefined)
   for (const s of SETTINGS) {
     await $.command
@@ -254,6 +314,52 @@ export function commands(on: On) {
       return { text: typeof r === 'string' ? r : view(r) }
     }
     return { text: picked.map(q => view(q, active.includes(q) ? undefined : waitedFor(q, queues))).join('\n\n') }
+  })
+
+  on('command.run', { command: 'queue-remove' }, async ($, e) => {
+    const words = e.args.trim().split(/\s+/).filter(Boolean)
+    if (words.length === 0 || words.length > 2) return { text: 'Usage: /queue-remove <id> [queue]' }
+    const queues = await openQueues($)
+    // `<id> <queue>`, or `<queue> <id>` when only the first word names a queue.
+    if (words.length === 2 && pickQueues(queues, words[0]).length === 1 && pickQueues(queues, words[1]).length === 0) words.reverse()
+    const [id, named] = words as [string, string | undefined]
+    const q = oneQueue(queues, named)
+    if (typeof q === 'string') return { text: q }
+    const path = `${q.dir}/queue-${q.name}.md`
+    // Re-read just before writing, so an edit since openQueues isn't lost.
+    let current: string
+    try {
+      current = await $.fs.read(path)
+    } catch {
+      return { text: `Couldn't read ${path}; nothing was changed.` }
+    }
+    const r = removeRow(current, id)
+    if ('error' in r) {
+      if (r.error === 'unknown')
+        return {
+          text: `Queue ${q.name} has no row ${id}. A task folded into another row (+ <title> in its Session cell) has no id of its own; ask Claude to drop it.`,
+        }
+      if (r.error === 'duplicate') return { text: `Queue ${q.name} has more than one row ${id}; edit the table by hand.` }
+      return {
+        text: `Row ${r.row.id} (${r.row.session}) is in progress${r.session ? ` in session ${r.session}` : ''}, so it can't be removed from here. Stop that session first, then run /queue-remove again.`,
+      }
+    }
+    try {
+      await $.fs.write(path, r.text)
+    } catch {
+      return { text: `Couldn't update ${path}; nothing was changed.` }
+    }
+    await refresh($, { quiet: true }).catch(() => undefined)
+    const { row } = r
+    const lines = [`Queue ${q.name}: removed row ${row.id} (${row.session}).`]
+    if (row.topic) lines.push(`Its topic file, ${q.dir}/${row.topic}, is still there.`)
+    if (/\s\+\s/.test(row.session))
+      lines.push(`The tasks folded into it (+ in its Session cell) went with it; they're in its topic file's Folded in section.`)
+    if (/^PAUSED\b/i.test(row.status)) lines.push(`It was ${row.status}; its branch or worktree, if any, is left alone.`)
+    if (r.others.length > 0)
+      lines.push(`${r.others.length > 1 ? 'Rows' : 'Row'} ${list(r.others.map(o => `${o.id} (${o.status})`))} still ${r.others.length > 1 ? 'name' : 'names'} it; edit ${r.others.length > 1 ? 'them' : 'it'} by hand if needed.`)
+    if (r.notes) lines.push(`The notes under the table mention it too.`)
+    return { text: lines.join(' ') }
   })
 
   for (const s of SETTINGS) {

@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import { SETTINGS, setLine } from './commands'
+import { removeRow, SETTINGS, setLine } from './commands'
 import { nextRow, parseQueue } from './queues'
 
 // A fake queues/ folder the commands read and write, and the status lines and
@@ -58,7 +58,7 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-parallels', 'queue-go-ahead', 'queue-commit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-remove', 'queue-parallels', 'queue-go-ahead', 'queue-commit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
@@ -257,4 +257,66 @@ test('the commands describe what they choose', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   for (const s of SETTINGS) expect(described[s.command]).not.toContain('line')
   expect(described['queue-commit']).toContain('commits on its own')
+})
+
+test('/queue-remove deletes the row, keeps the topic file, and names rows after it', async ($, on) => {
+  const files = { 'queue-demo.md': QUEUE.replace('## Sessions', 'Session 4 runs before 5.\n\n## Sessions').replace('| TODO (last) |', '| TODO (after 4) |') }
+  fakeFolder(on, files)
+  const { text } = await run($, 'queue-remove', '4')
+  expect(text).toContain('Queue demo: removed row 4 (Fourth).')
+  expect(text).toContain('queues/d/four.md, is still there')
+  expect(text).toContain('Row 5 (TODO (after 4)) still names it')
+  expect(text).toContain('notes under the table mention it')
+  expect(files['queue-demo.md']).not.toContain('Fourth')
+  expect(files['queue-demo.md']).toContain('| 3 | Third |')
+  expect(files['queue-demo.md']).toContain('| 5 | Fifth |')
+})
+
+test('/queue-remove refuses a running row and an unknown id, and deletes DONE and DROPPED rows', async ($, on) => {
+  const files = { 'queue-demo.md': QUEUE }
+  fakeFolder(on, files)
+  expect((await run($, 'queue-remove', '2')).text).toContain('Row 2 (Second) is in progress in session s-1')
+  expect((await run($, 'queue-remove', '9')).text).toContain('Queue demo has no row 9. A task folded')
+  expect((await run($, 'queue-remove', '')).text).toBe('Usage: /queue-remove <id> [queue]')
+  expect(files['queue-demo.md']).toBe(QUEUE)
+  expect((await run($, 'queue-remove', '1')).text).toContain('removed row 1 (First)')
+  expect((await run($, 'queue-remove', '6')).text).toContain('removed row 6 (Sixth)')
+  expect(files['queue-demo.md']).not.toContain('First')
+  expect(files['queue-demo.md']).not.toContain('Sixth')
+})
+
+test('/queue-remove names a PAUSED row\'s partial work, and needs the queue with two active', async ($, on) => {
+  const paused = QUEUE.replace('| 4 | Fourth | `d/four.md` | TODO |', '| 4 | Fourth | `d/four.md` | PAUSED 2026-11-05 (blocked; on branch q/4-four) |')
+  const files = { 'queue-a.md': paused, 'queue-b.md': QUEUE }
+  fakeFolder(on, files)
+  expect((await run($, 'queue-remove', '4')).text).toContain('Two or more queues are active')
+  const { text } = await run($, 'queue-remove', 'A 4')
+  expect(text).toContain('It was PAUSED 2026-11-05 (blocked; on branch q/4-four); its branch or worktree, if any, is left alone.')
+  expect(files['queue-a.md']).not.toContain('Fourth')
+  expect(files['queue-b.md']).toBe(QUEUE)
+})
+
+test('removeRow: case-insensitive ids, duplicates, folded rows, Windows line endings, and lists of sessions', () => {
+  const t = ['| # | Session | Topic file | Status | Model |', '|---|---|---|---|---|', '| R3 | A | `a.md` | TODO | opus |', '| 4 | B | `b.md` | TODO (folded into R3, pending) | opus |', '', 'Sessions 1, 2, and R3 share files.', ''].join('\r\n')
+  const r = removeRow(t, 'r3')
+  if ('error' in r) throw new Error(r.error)
+  expect(r.text).toBe(t.replace('| R3 | A | `a.md` | TODO | opus |\r\n', ''))
+  expect(r.others.map(o => o.id)).toEqual(['4'])
+  expect(r.notes).toBe(true)
+  expect(removeRow(t.replace('| 4 |', '| R3 | C | `c.md` | TODO | opus |\r\n| 4 |'), 'R3')).toEqual({ error: 'duplicate' })
+  const n = removeRow(t, '4')
+  if ('error' in n) throw new Error(n.error)
+  expect(n.notes).toBe(false)
+  expect(n.others).toEqual([])
+})
+
+test('removeRow takes only the session table; folded tasks and dash ranges are named', async ($, on) => {
+  const other = QUEUE.replace('## Checks', '| 4 | not | a | session | row |\n\n## Checks').replace('Sessions 6 and', 'x').replace('## Sessions', 'Sessions 3–4 share files.\n\n## Sessions').replace('| 4 | Fourth |', '| 4 | Fourth + Extra |')
+  const files = { 'queue-demo.md': other }
+  fakeFolder(on, files)
+  const { text } = await run($, 'queue-remove', '4')
+  expect(text).toContain('The tasks folded into it')
+  expect(text).toContain('notes under the table mention it')
+  expect(files['queue-demo.md']).toContain('| 4 | not | a | session | row |')
+  expect(files['queue-demo.md']).not.toContain('Fourth')
 })

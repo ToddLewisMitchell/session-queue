@@ -172,6 +172,14 @@ const FINISHED = /^(?:DONE|DROPPED)\b/i
 const HELD = /^TODO\s*\((?:placement not decided|folded into)/i
 const RUNNABLE = /^(?:TODO|PAUSED)\b/i
 
+// The row ids a `TODO (after X)` status names: every id after "after", up to a
+// `;`, the word "before", or the closing parenthesis (also words such as
+// "and", which match no row). Empty for any other status.
+export function afterIds(status: string) {
+  const after = /^TODO\s*\(after\b([^);]*?)(?:\bbefore\b|[;)])/i.exec(status)?.[1]
+  return after === undefined ? [] : (after.match(/[\w.-]+/g) ?? [])
+}
+
 export const isOpen = (r: Row) => !FINISHED.test(r.status)
 
 // The row `next-session` would most likely run: the first TODO or PAUSED row,
@@ -189,8 +197,7 @@ export function nextRowOf(all: Row[]): Row | undefined {
   const open = new Set(all.filter(r => isOpen(r) && !HELD.test(r.status)).map(r => r.id))
   return all.find(r => {
     if (!RUNNABLE.test(r.status) || HELD.test(r.status)) return false
-    const after = /^TODO\s*\(after\b([^);]*?)(?:\bbefore\b|[;)])/i.exec(r.status)?.[1]
-    if (after !== undefined && (after.match(/[\w.-]+/g) ?? []).some(id => id !== r.id && open.has(id))) return false
+    if (afterIds(r.status).some(id => id !== r.id && open.has(id))) return false
     if (/^TODO\s*\(last\)/i.test(r.status) && [...open].some(id => id !== r.id)) return false
     return true
   })
