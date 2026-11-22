@@ -21,7 +21,7 @@ Multi-turn scenarios continue the same conversation with --resume, to
 cover what happens after the user answers (approve, decide, stop, ...).
 
 Usage:
-    python3 test/test_skill.py                  # everything (~$5, a few minutes)
+    python3 test/test_skill.py                  # everything (~$8 with a haiku judge; --dry estimates)
     python3 test/test_skill.py resume skip      # by name
     python3 test/test_skill.py --list           # names and descriptions
     python3 test/test_skill.py --changed [REF]  # only scenarios covering skill
@@ -56,7 +56,7 @@ from typing import Callable, Optional
 REPO_DIR = Path(__file__).resolve().parent.parent
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
 MODEL = os.environ.get("MODEL", "sonnet")  # queue rows are assigned this model
-JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "haiku")
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "haiku")  # see judge()
 BUDGET = os.environ.get("BUDGET", "2.00")  # per turn
 TIMEOUT = int(os.environ.get("TIMEOUT", "900"))  # per turn
 JOBS = int(os.environ.get("JOBS", "8"))
@@ -366,11 +366,17 @@ def snapshot(root):
 
 
 def judge(c: Checker, reply, question, label):
-    """Ask a small model whether the reply meets `question`; record it as a check."""
+    """Ask JUDGE_MODEL whether the reply meets `question`; record it as a check.
+
+    The verdict comes last, after the reasoning: asked for it first, haiku
+    committed to FAIL and then described a reply that met the question.
+    """
     prompt = ("You grade one reply from an AI coding assistant in an automated test. "
               "Judge only from the reply text below; don't assume anything it doesn't say.\n\n"
               f"Question: {question}\n\n"
-              "Answer on the first line with exactly PASS or FAIL, then one short sentence why.\n\n"
+              "First, in one or two sentences, check the reply against each part of the question. "
+              "Then give your verdict alone on the last line: exactly PASS or FAIL. PASS means the "
+              "reply meets every part of the question.\n\n"
               f"<reply>\n{reply}\n</reply>")
     try:
         r = subprocess.run(["claude", "-p", prompt, "--model", JUDGE_MODEL, "--tools", "",
@@ -380,13 +386,30 @@ def judge(c: Checker, reply, question, label):
         data = json.loads(r.stdout)
         verdict = (data.get("result") or "").strip()
         c.cost += data.get("total_cost_usd") or 0
+        if data.get("is_error"):
+            if LIMIT_RE.search(verdict):
+                raise Limit(verdict)
+            verdict = f"judge error: {verdict}"
+    except Limit:
+        raise
     except Exception as e:  # noqa: BLE001
-        verdict = f"FAIL judge error: {e}"
-    if LIMIT_RE.search(verdict) and not verdict.upper().startswith(("PASS", "FAIL")):
+        verdict = f"judge error: {e}"
+    lines = [l.strip() for l in verdict.splitlines() if l.strip()]
+    # The last line must be the verdict alone; markdown, punctuation, and a
+    # "Verdict:" label are tolerated. Anything else is a malformed answer: FAIL.
+    last = re.sub(r"[^A-Z]", "", lines[-1].upper()).removeprefix("VERDICT") if lines else ""
+    # The reasoning may quote a reply that mentions a usage limit, so a limit
+    # counts only in an error result (above) or a short answer with no verdict.
+    if last not in ("PASS", "FAIL") and len(verdict) < 300 and LIMIT_RE.search(verdict):
         raise Limit(verdict)
-    ok = verdict.upper().startswith("PASS")
-    why = verdict.split("\n", 1)[-1].strip() if "\n" in verdict else verdict
-    c.check(ok, f"judge: {label}" + ("" if ok else f"\n       ({why[:200]})"))
+    ok = last == "PASS"
+    if last in ("PASS", "FAIL"):
+        why = " ".join(lines[:-1]) or verdict
+    elif verdict.startswith("judge error"):
+        why = verdict
+    else:
+        why = "malformed judge answer: " + " ".join(lines)
+    c.check(ok, f"judge: {label}" + ("" if ok else f"\n       ({why[:300]})"))
 
 
 # --------------------------------------------------------------------------
@@ -483,7 +506,9 @@ def _(c, ctx):
         c.check(all(l in row_lines(root) for l in ctx.start["rows"]), "existing rows untouched")
     c.check(not py_has(root, "calc.py", "divide"), "nothing built (only queued)")
     judge(c, ctx.out, "Does the reply say where the task was placed (or which session it was folded into) "
-          "and why, WITHOUT asking the user to choose or confirm its place in the queue?",
+          "and why, WITHOUT asking the user to choose or confirm its place in the queue? (The skill "
+          "never asks to confirm a placement: reporting it as done, with no question about it, is a "
+          "yes even if the reply doesn't call it final.)",
           "places it and reports, no placement question")
 
 
@@ -566,7 +591,8 @@ def setup_model(root, fx):
 def _(c, ctx):
     c.check(not py_has(ctx.root, "calc.py", "subtract"), "nothing built on the wrong model")
     judge(c, ctx.out, f"Does the reply tell the user that session 1 is assigned {OTHER_MODEL}, suggest "
-          "switching with /model, and stop instead of building?", "asks for a /model switch and waits")
+          "switching with /model, and stop instead of building, WITHOUT offering to carry on with the "
+          "current model instead?", "asks for a /model switch and waits")
 
 
 def setup_baseline(root, fx):
@@ -891,8 +917,9 @@ def parallel_divide(c, ctx):
     c.check(st.startswith("IN PROGRESS") and "waiting for approval" in st,
             f"row 3 in the main checkout's queue: waiting for approval ({st})")
     c.check(status(root, "5") == "IN PROGRESS 2026-11-12 (building; calc-5)", "row 5's claim untouched")
-    judge(c, ctx.outs[0], "Does the reply say session 5 is already running (in another conversation, "
-          "in the main checkout), and ask whether to run session 3 (divide) as a parallel session "
+    judge(c, ctx.outs[0], "Does the reply say session 5 is claimed by another session (in progress; "
+          "adding that the claim may be stale is fine), and ask whether to run "
+          "session 3 (divide) as a parallel session "
           "in its own worktree rather than beside it in the main checkout?",
           "names the running session; asks before going parallel")
 
@@ -940,8 +967,9 @@ def _(c, ctx):
     c.check(st.startswith("IN PROGRESS") and "waiting for approval" in st,
             f"row 5 in the main checkout's queue: waiting for approval ({st})")
     c.check(status(root, "3") == "IN PROGRESS 2026-11-12 (building; calc-3)", "row 3's claim untouched")
-    judge(c, ctx.outs[0], "Does the reply say session 3 is already running (in another conversation, "
-          "in the main checkout), and ask whether to run session 5 (slugify) as a parallel session "
+    judge(c, ctx.outs[0], "Does the reply say session 3 is claimed by another session (in progress; "
+          "adding that the claim may be stale is fine), and ask whether to run "
+          "session 5 (slugify) as a parallel session "
           "in its own worktree rather than beside it in the main checkout?",
           "names the running session; asks before going parallel")
 
@@ -1005,8 +1033,9 @@ def _(c, ctx):
         c.check(snapshot(root)["queues"] == ctx.start["queues"],
                 "with no placeholder row, nothing was written (it waits for the user to confirm)")
     judge(c, ctx.out, "Session 5 is running in another conversation that this one can't message. "
-          "Does the reply ask the user to confirm they'll pass the change on to that conversation "
-          "(or say it messaged that session), and mention that session 5 may already be past building?",
+          "Does the reply do both of these: (a) EITHER ask the user to confirm they'll pass the change "
+          "on to that conversation OR say it messaged that session (one of the two is enough), and "
+          "(b) mention that session 5 may already be past building?",
           "handles the running session correctly")
 
 
