@@ -5,13 +5,13 @@ import { activeQueues, type Queue } from './queues'
 
 // What the settings display (display.tsx) draws, kept in `$.state`: each
 // active queue's settings, written by `refresh` in status.ts, and the Bash
-// calls the commit guard let through because Commits is `auto` (guard.ts).
+// calls the commit guard let through because Auto-commit is `on` (guard.ts).
 // Each atom's `read` and `update` stay in this file, beside it, so the engine
 // can list the values the module keeps.
 
 // Change a tag when its value's fields change: a reload keeps what the old
 // code stored, and the tag declines it.
-const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-4' })
+const settings = atom({ plugin: 'session-queue', key: 'settings' } as const, [], { shape: 'settings-5' })
 const autoCommits = atom({ plugin: 'session-queue', key: 'autoCommits' } as const, [], { shape: 'auto-commits-1' })
 // Enough for a long session's commits; older rows lose their note.
 const AUTO_COMMITS_KEPT = 50
@@ -19,8 +19,8 @@ const AUTO_COMMITS_KEPT = 50
 export const settingsOf = (q: Queue): QueueSettings => ({
   name: q.name,
   parallels: q.parallels,
-  goAhead: q.autoGoAhead ? 'auto' : 'ask',
-  commits: q.autoCommit ? 'auto' : 'ask',
+  autoStart: q.autoStart ? 'on' : 'off',
+  autoCommit: q.autoCommit ? 'on' : 'off',
   clear: q.clear ? 'on' : 'off',
   notify: q.notify ? 'on' : 'off',
   autoAdvance: q.autoAdvance === undefined ? 'off' : `${q.autoAdvance}%`,
@@ -29,8 +29,8 @@ export const settingsOf = (q: Queue): QueueSettings => ({
 // The settings shown, by the queue line's name, in the template's order.
 export const SHOWN = [
   ['Parallels', 'parallels'],
-  ['Go-ahead', 'goAhead'],
-  ['Commits', 'commits'],
+  ['Auto-start', 'autoStart'],
+  ['Auto-commit', 'autoCommit'],
   ['Clear', 'clear'],
   ['Auto-advance', 'autoAdvance'],
   ['Notify', 'notify'],
@@ -38,9 +38,8 @@ export const SHOWN = [
 
 // Every setting as `name: value`, joined by ` · `: the prompt footer's text
 // (display.tsx) and `/queue`'s settings line (commands.ts), so the two read
-// the same. Commits and Clear read as `commit` and `auto-clear` there, after
-// their commands.
-const LABEL: Partial<Record<keyof QueueSettings, string>> = { commits: 'commit', clear: 'auto-clear' }
+// the same. Clear reads as `auto-clear` there, after its command.
+const LABEL: Partial<Record<keyof QueueSettings, string>> = { clear: 'auto-clear' }
 export const summary = (s: QueueSettings) =>
   SHOWN.map(([name, key]) => `${LABEL[key] ?? name.toLowerCase()}: ${key === 'autoAdvance' && s[key] !== 'off' ? `until ${s[key]} weekly` : s[key]}`).join(' · ')
 
@@ -74,12 +73,12 @@ export async function settingsNow($: EngineInterface) {
 }
 
 // Called by the commit guard for a commit or merge it let through because
-// Commits is `auto`.
+// Auto-commit is `on`.
 export async function noteAutoCommit($: EngineInterface, toolUseId: string) {
   await update($, autoCommits, ids => [...ids.filter(id => id !== toolUseId), toolUseId].slice(-AUTO_COMMITS_KEPT))
 }
 
-// Whether the guard let this call through because Commits is `auto`.
+// Whether the guard let this call through because Auto-commit is `on`.
 export async function isAutoCommit($: EngineInterface, toolUseId: string) {
   return (await read($, autoCommits)).includes(toolUseId)
 }

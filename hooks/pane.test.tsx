@@ -153,3 +153,23 @@ test('only the next row is marked when two rows share its id', async ($, on) => 
   expect((await ui.find({ type: 'Text', text: /Third/ }))?.text).toBe('  2 Third')
   await ui.unmount()
 })
+
+test('a session started in a topic folder finds the queue folder above it', async ($, on) => {
+  fakeFolder(on, { 'queue-demo.md': QUEUE }, undefined, '/p/code')
+  on('session.root', () => ({ value: '/p/code/queues/word-add-in' }))
+  // The engine's lookup names the session's own folder, not the checkout above it.
+  on('vcs.detect', () => ({ vcs: 'git', root: '/p/code/queues/word-add-in', mainRoot: null, revision: null, branch: null, defaultBranch: null, remote: null }))
+  await $.session.start({ cwd: '/p/code/queues/word-add-in', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(PANE('terminal'))
+  expect((await ui.find({ type: 'Text', text: /2 Second/ }))?.text).toBe('▶ 2 Second')
+  await ui.unmount()
+})
+
+test('a project with no queue of its own does not take a queue folder above it', async ($, on) => {
+  fakeFolder(on, { 'queue-demo.md': QUEUE }, undefined, '/p')
+  on('session.root', () => ({ value: '/p/other-repo' }))
+  await $.session.start({ cwd: '/p/other-repo', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(PANE('terminal'))
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('No open queue (queues/queue-<name>.md).')
+  await ui.unmount()
+})

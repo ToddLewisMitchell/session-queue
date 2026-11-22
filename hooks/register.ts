@@ -22,12 +22,13 @@ import { refresh } from './status'
 //   `next-session` (`context.ts`), so the session doesn't spend tool calls
 //   reading them.
 // - The commit guard (`guard.ts`): commits, merges, and pushes ask first, as
-//   the Commits setting says, unless the user's latest message approved the
+//   the Auto-commit setting says, unless the user's latest message approved the
 //   commit (`notePrompt`, fed every prompt below).
-// - Slash commands (`commands.ts`): `/queue` shows the queue, and
-//   `/queue-<setting>` changes one settings line, with no model turn.
-// - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows
-//   and the settings, with a button to change each, redrawn on every refresh.
+// - Slash commands (`commands.ts`): `/queue` shows the queue,
+//   `/queue-<setting>` changes one settings line, and `/queue-remove` deletes
+//   a row and its topic file, with no model turn.
+// - The queue pane (`pane.tsx`): `/queue-pane` opens a pane of the open rows,
+//   redrawn on every refresh (the settings are under the prompt).
 // - Auto-advance (`advance.ts`): when a session's row goes DONE and the queue's
 //   Auto-advance line is on, type `next-session` for the user after a
 //   cancellable delay, through the same clear as their own typing.

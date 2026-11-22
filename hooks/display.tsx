@@ -6,15 +6,14 @@ import { isAutoCommit, settingsNow, summary } from './settings-state'
 // The settings shown beside the chat, from the values `refresh` (status.ts)
 // keeps in `$.state`:
 // - In the prompt footer's mode labels (`SessionMode`, terminal and desktop):
-//   every setting of each active queue, `queue · parallels: ask · go-ahead:
-//   auto · …`, so the user always knows how much runs without asking them
+//   every setting of each active queue, `queue · parallels: ask · auto-start:
+//   on · …`, so the user always knows how much runs without asking them
 //   (a separator after `queue`, so each setting keeps its own colon).
 // - On the phone, where the footer isn't drawn, the same at the end of the
 //   hint line under the prompt (`PromptHint`).
-// - Under a Bash row that committed or merged because Commits is `auto` (the
+// - Under a Bash row that committed or merged because Auto-commit is `on` (the
 //   commit guard records it), one dim line saying so.
-// The queue pane's settings buttons are in pane.tsx; the toast on a change is
-// `refresh`'s.
+// The toast on a change is `refresh`'s.
 
 // The labels for the active queues: one when they all read the same, else
 // one per queue, by name.
@@ -59,7 +58,7 @@ export function display(on: On) {
     return (
       <Box flexDirection="column">
         {await next(e)}
-        <Text dimColor>  {what} allowed without the queue asking (Commits: auto)</Text>
+        <Text dimColor>  {what} allowed without the queue asking (auto-commit: on)</Text>
       </Box>
     )
   })

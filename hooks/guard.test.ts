@@ -96,29 +96,29 @@ const say = ($: any, text: string, kind = 'composer', turnId?: string) =>
 
 const check = ($: any, command: string) => $.tool.check({ tool: 'Bash', input: { command } })
 const APPROVE = { 'queue-a.md': '**Commits.** ask (chosen 2026-11-19)\n' }
-const AUTO = { 'queue-a.md': '**Commits.** auto (chosen 2026-11-19)\n' }
+const AUTO = { 'queue-a.md': '**Auto-commit.** on (chosen 2026-11-19)\n' }
 
-test('Commits ask asks before a commit or merge', async ($, on) => {
+test('Auto-commit off (an older Commits ask) asks before a commit or merge', async ($, on) => {
   fake(on, APPROVE)
   const r = await check($, 'git commit -m x')
   expect(r.decision).toBe('ask')
-  expect(r.reason).toContain("the queue's Commits setting is ask. Allow this commit?")
+  expect(r.reason).toContain("the queue's Auto-commit setting is off. Allow this commit?")
   expect((await check($, 'git merge --no-ff q/1-x')).decision).toBe('ask')
   expect((await check($, 'git status')).decision).toBe('allow')
 })
 
-test('a missing Commits line means ask', async ($, on) => {
+test('a missing Auto-commit line means off', async ($, on) => {
   fake(on, { 'queue-a.md': '**Pace.** economy\n' })
   expect((await check($, 'git commit -m x')).decision).toBe('ask')
 })
 
-test('Commits auto lets a commit through; a push still asks', async ($, on) => {
+test('Auto-commit on lets a commit through; a push still asks', async ($, on) => {
   fake(on, AUTO)
   expect((await check($, 'git commit -m x')).decision).toBe('allow')
   expect((await check($, 'git push')).decision).toBe('ask')
 })
 
-test('one queue on ask (or an older approve) is enough to ask', async ($, on) => {
+test('one queue with Auto-commit off (an older Commits approve) is enough to ask', async ($, on) => {
   fake(on, { ...AUTO, 'queue-b.md': '**Commits.** approve\n' })
   expect((await check($, 'git commit -m x')).decision).toBe('ask')
 })

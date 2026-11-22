@@ -4,7 +4,10 @@ import { nextRow, parseQueue } from './queues'
 
 // A fake queues/ folder the commands read and write, and the status lines and
 // commands the plugin registers.
-function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: boolean } = {}) {
+// Topic files are kept by their last path part, like queue files; `rm` (or
+// PowerShell on Windows) deletes one, and `ran` records each command.
+function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: boolean; platform?: string; failDelete?: boolean; refuseStat?: boolean } = {}) {
+  const ran: { argv: readonly string[]; env?: Record<string, string> }[] = []
   const shown: (string | undefined)[] = []
   const registered: string[] = []
   const described: Record<string, string> = {}
@@ -13,6 +16,22 @@ function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: 
     value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })),
   }))
   on('fs.read', (_: unknown, e: { path: string }) => ({ value: files[e.path.split('/').pop() ?? ''] }))
+  on('fs.exists', (_: unknown, e: { path: string }) => ({ value: Object.hasOwn(files, e.path.split('/').pop() ?? '') }))
+  // A folder resolves to itself (the engine passes it absolute); a file is one
+  // when its name is kept.
+  on('fs.stat', (_: unknown, e: { path: string; resolve: boolean }) => {
+    if (opts.refuseStat) throw new Error('EACCES')
+    if (e.resolve) return { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: e.path } }
+    if (!Object.hasOwn(files, e.path.split('/').pop() ?? '')) throw new Error('ENOENT')
+    return { value: { kind: 'file', size: 1, mtimeMs: 0, isLink: false } }
+  })
+  on('session.info', () => ({ value: { platform: opts.platform ?? 'linux' } }))
+  on('process.run', (_: unknown, e: { argv: readonly string[]; init?: { env?: Record<string, string> } }) => {
+    ran.push({ argv: e.argv, env: e.init?.env })
+    const path = e.argv[0] === 'rm' ? e.argv.at(-1)! : (e.init?.env?.SESSION_QUEUE_FILE ?? '')
+    if (!opts.failDelete) delete files[path.split('/').pop() ?? '']
+    return { value: { exitCode: opts.failDelete ? 1 : 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('fs.write', (_: unknown, e: { path: string; text: string }) => {
     if (opts.failWrite) throw new Error('EACCES')
     files[e.path.split('/').pop() ?? ''] = e.text
@@ -25,7 +44,7 @@ function fakeFolder(on: any, files: Record<string, string>, opts: { failWrite?: 
     return { value: { command: e.name } }
   })
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
-  return { shown, registered, described, clock }
+  return { shown, registered, described, clock, ran }
 }
 
 const run = ($: any, command: string, args = '') => $.command.run({ command, args })
@@ -58,13 +77,13 @@ const QUEUE = [
 test('the commands are registered at session start', async ($, on) => {
   const { registered } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['queue', 'queue-remove', 'queue-parallels', 'queue-go-ahead', 'queue-commit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
+  expect(registered).toEqual(['queue', 'queue-remove', 'queue-parallels', 'queue-autostart', 'queue-autocommit', 'queue-autoclear', 'queue-autoadvance', 'queue-notify', 'queue-pane'])
 })
 
 test('/queue shows the open rows, the next row, and the settings', async ($, on) => {
   fakeFolder(on, { 'queue-demo.md': QUEUE })
   const { text } = await run($, 'queue')
-  expect(text).toContain('Queue demo · parallels: off · go-ahead: ask · commit: ask · auto-clear: on · auto-advance: off · notify: off')
+  expect(text).toContain('Queue demo · parallels: off · auto-start: off · auto-commit: off · auto-clear: on · auto-advance: off · notify: off')
   expect(text).toContain('next-session runs 4 (Fourth) on opus')
   expect(text).toContain('2  Second: IN PROGRESS 2026-11-03 (building; s-1)')
   expect(text).toContain('5  Fifth: TODO (last)')
@@ -96,12 +115,12 @@ test('/queue-parallels replaces an older Pace line with today\'s date', async ($
 test('a missing line goes where the template puts it', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  await run($, 'queue-go-ahead', 'auto')
+  await run($, 'queue-autostart', 'on')
   await run($, 'queue-notify', 'on')
   const text = files['queue-demo.md']!
   const at = (s: string) => text.indexOf(s)
-  expect(at('**Pace.**') < at('**Go-ahead.** auto: start building')).toBe(true)
-  expect(at('**Go-ahead.**') < at('**Commits.**')).toBe(true)
+  expect(at('**Pace.**') < at('**Auto-start.** on: start building')).toBe(true)
+  expect(at('**Auto-start.**') < at('**Commits.**')).toBe(true)
   expect(at('**Commits.**') < at('**Notify.** on: push a notification')).toBe(true)
   expect(at('**Notify.**') < at('## Checks')).toBe(true)
 })
@@ -121,9 +140,10 @@ test('a bad value, an extra word, or an unnamed second queue writes nothing', as
 test('the same value again changes nothing', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  await run($, 'queue-commit', 'auto')
+  await run($, 'queue-autocommit', 'on')
   const once = files['queue-demo.md']
-  expect((await run($, 'queue-commit', 'auto')).text).toBe('Queue demo: Commits is already auto.')
+  expect(once).not.toContain('**Commits.**')
+  expect((await run($, 'queue-autocommit', 'on')).text).toBe('Queue demo: Auto-commit is already on.')
   expect(files['queue-demo.md']).toBe(once)
 })
 
@@ -150,9 +170,9 @@ test('an inherited key is not a value', async ($, on) => {
 })
 
 test('a queue named like a value is still named', async ($, on) => {
-  const files: Record<string, string> = { 'queue-auto.md': QUEUE, 'queue-b.md': QUEUE }
+  const files: Record<string, string> = { 'queue-on.md': QUEUE, 'queue-b.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-commit', 'auto auto')).text).toBe('Queue auto: Commits set to auto.')
+  expect((await run($, 'queue-autocommit', 'on on')).text).toBe('Queue on: Auto-commit set to on.')
   expect(files['queue-b.md']).toBe(QUEUE)
 })
 
@@ -201,17 +221,19 @@ test('nextRow: ids after "before" or a ";" in an after status do not block', () 
 
 const WAITING = QUEUE.replace('# Demo queue\n', '# Later queue\n\nWaits for `queue-a.md`: starts when it closes.\n')
 
-test('/queue-commit takes ask or auto; an older approve line already reads as ask', async ($, on) => {
+test('/queue-autocommit takes off or on; an older Commits approve line already reads as off', async ($, on) => {
   // Both on `approve`; later waits for a.
   const files: Record<string, string> = { 'queue-a.md': QUEUE, 'queue-later.md': WAITING }
   fakeFolder(on, files)
-  expect((await run($, 'queue-commit', 'approve')).text).toBe('Usage: /queue-commit <ask|auto> [queue]')
-  expect((await run($, 'queue-commit', 'ask')).text).toBe('Queue a: Commits is already ask.')
+  expect((await run($, 'queue-autocommit', 'approve')).text).toBe('Usage: /queue-autocommit <off|on> [queue]')
+  expect((await run($, 'queue-autocommit', 'off')).text).toBe('Queue a: Auto-commit is already off.')
   expect(files['queue-a.md']).toBe(QUEUE)
-  // A waiting queue on approve isn't named as left behind by a change to ask.
-  await run($, 'queue-commit', 'auto')
-  expect((await run($, 'queue-commit', 'ask')).text).toBe('Queue a: Commits set to ask.')
-  expect(files['queue-a.md']).toMatch(/^\*\*Commits\.\*\* ask \(chosen \d{4}-\d\d-\d\d; see the skill's Go-ahead, Commits, and Clear section\)\.$/m)
+  // A waiting queue on approve isn't named as left behind by a change to off.
+  await run($, 'queue-autocommit', 'on')
+  expect((await run($, 'queue-autocommit', 'off')).text).toBe('Queue a: Auto-commit set to off.')
+  // The older line is renamed in place, its section too.
+  expect(files['queue-a.md']).toMatch(/^\*\*Auto-commit\.\*\* off \(chosen \d{4}-\d\d-\d\d; see the skill's Auto-start, Auto-commit, and Clear section\)\.$/m)
+  expect(files['queue-a.md']).not.toContain('**Commits.**')
   expect(files['queue-later.md']).toBe(WAITING)
 })
 
@@ -223,7 +245,7 @@ test('a waiting queue is not active: commands unnamed act on the active one', as
   )
   expect(files['queue-later.md']).toBe(WAITING)
   // Named, the waiting queue still changes.
-  expect((await run($, 'queue-commit', 'auto later')).text).toBe('Queue later: Commits set to auto.')
+  expect((await run($, 'queue-autocommit', 'on later')).text).toBe('Queue later: Auto-commit set to on.')
 })
 
 test('/queue shows the waiting queue after the active one, without a next row', async ($, on) => {
@@ -256,15 +278,20 @@ test('the commands describe what they choose', async ($, on) => {
   const { described } = fakeFolder(on, { 'queue-demo.md': QUEUE })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   for (const s of SETTINGS) expect(described[s.command]).not.toContain('line')
-  expect(described['queue-commit']).toContain('commits on its own')
+  expect(described['queue-autocommit']).toContain('commits on its own')
 })
 
-test('/queue-remove deletes the row, keeps the topic file, and names rows after it', async ($, on) => {
-  const files = { 'queue-demo.md': QUEUE.replace('## Sessions', 'Session 4 runs before 5.\n\n## Sessions').replace('| TODO (last) |', '| TODO (after 4) |') }
-  fakeFolder(on, files)
+test('/queue-remove deletes the row and its topic file, and names rows after it', async ($, on) => {
+  const files: Record<string, string> = {
+    'queue-demo.md': QUEUE.replace('## Sessions', 'Session 4 runs before 5.\n\n## Sessions').replace('| TODO (last) |', '| TODO (after 4) |'),
+    'four.md': '# Fourth',
+  }
+  const { ran } = fakeFolder(on, files)
   const { text } = await run($, 'queue-remove', '4')
-  expect(text).toContain('Queue demo: removed row 4 (Fourth).')
-  expect(text).toContain('queues/d/four.md, is still there')
+  expect(text).toContain('Queue demo: removed row 4 (Fourth). Its topic file, queues/d/four.md, was deleted.')
+  expect(ran.map(r => r.argv.slice(0, 3))).toEqual([['rm', '-f', '--']])
+  expect(ran[0]!.argv[3]).toMatch(/^\/.*\/queues\/d\/four\.md$/)
+  expect(files['four.md']).toBeUndefined()
   expect(text).toContain('Row 5 (TODO (after 4)) still names it')
   expect(text).toContain('notes under the table mention it')
   expect(files['queue-demo.md']).not.toContain('Fourth')
@@ -312,11 +339,66 @@ test('removeRow: case-insensitive ids, duplicates, folded rows, Windows line end
 
 test('removeRow takes only the session table; folded tasks and dash ranges are named', async ($, on) => {
   const other = QUEUE.replace('## Checks', '| 4 | not | a | session | row |\n\n## Checks').replace('Sessions 6 and', 'x').replace('## Sessions', 'Sessions 3–4 share files.\n\n## Sessions').replace('| 4 | Fourth |', '| 4 | Fourth + Extra |')
-  const files = { 'queue-demo.md': other }
+  const files: Record<string, string> = { 'queue-demo.md': other, 'four.md': '# Fourth' }
   fakeFolder(on, files)
   const { text } = await run($, 'queue-remove', '4')
-  expect(text).toContain('The tasks folded into it')
+  expect(text).toContain('The tasks folded into it (+ in its Session cell) went with it, and with its topic file.')
   expect(text).toContain('notes under the table mention it')
   expect(files['queue-demo.md']).toContain('| 4 | not | a | session | row |')
   expect(files['queue-demo.md']).not.toContain('Fourth')
+})
+
+test('/queue-remove keeps a topic file another row names, in this queue or another (closed ones too)', async ($, on) => {
+  const shared = QUEUE.replace('| 5 | Fifth | `d/five.md` |', '| 5 | Fifth | `d/four.md` |')
+  const files: Record<string, string> = { 'queue-demo.md': shared, 'four.md': '# Fourth', 'three.md': '# Third' }
+  const { ran } = fakeFolder(on, files)
+  expect((await run($, 'queue-remove', '4')).text).toContain('Its topic file, queues/d/four.md, was kept: another row in queue demo names it.')
+  files['queue-old.md'] = 'Closed 2026-11-01, a record only.\n\n| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 9 | Moved | `./d//three.md` | DROPPED 2026-11-01 (moved) | opus |\n'
+  expect((await run($, 'queue-remove', '3')).text).toContain('Its topic file, queues/d/three.md, was kept: another row in queue old names it.')
+  expect(ran).toEqual([])
+  expect(files['four.md']).toBe('# Fourth')
+  expect(files['three.md']).toBe('# Third')
+})
+
+test('/queue-remove keeps a topic path outside the queue folder, skips a missing file, and says when a delete fails', async ($, on) => {
+  const outside = QUEUE.replace('`d/four.md`', '`../notes/four.md`').replace('| 3 | Third |', '| 3 | Third + Extra |')
+  const files: Record<string, string> = { 'queue-demo.md': outside, 'four.md': '# Fourth', 'five.md': '# Fifth' }
+  const { ran } = fakeFolder(on, files, { failDelete: true })
+  expect((await run($, 'queue-remove', '4')).text).toContain('Its topic file, ../notes/four.md, is outside the queue folder, so it was kept.')
+  // Row 3's topic file isn't there: nothing to say about it.
+  expect((await run($, 'queue-remove', '3')).text).toBe(
+    'Queue demo: removed row 3 (Third + Extra). The tasks folded into it (+ in its Session cell) went with it.',
+  )
+  expect((await run($, 'queue-remove', '5')).text).toContain("Couldn't delete its topic file, queues/d/five.md; delete it by hand.")
+  expect(ran.length).toBe(1)
+  expect(files['four.md']).toBe('# Fourth')
+})
+
+test('/queue-remove deletes on Windows through PowerShell, the path in a variable', async ($, on) => {
+  const files: Record<string, string> = { 'queue-demo.md': QUEUE, 'four.md': '# Fourth' }
+  const { ran } = fakeFolder(on, files, { platform: 'windows' })
+  expect((await run($, 'queue-remove', '4')).text).toContain('was deleted.')
+  expect(ran[0]!.argv).toEqual(['powershell', '-NoProfile', '-NonInteractive', '-Command', 'Remove-Item -LiteralPath $env:SESSION_QUEUE_FILE'])
+  expect(ran[0]!.env?.SESSION_QUEUE_FILE).toMatch(/^\/.*\/queues\/d\/four\.md$/)
+})
+
+test('/queue-remove matches another row\'s spelling in case only where names ignore case', async ($, on) => {
+  const other = '| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 9 | Moved | `D/Four.md` | TODO | opus |\n'
+  const linux: Record<string, string> = { 'queue-demo.md': QUEUE, 'queue-b.md': other, 'four.md': '# Fourth' }
+  fakeFolder(on, linux)
+  expect((await run($, 'queue-remove', 'demo 4')).text).toContain('was deleted.')
+})
+
+test('/queue-remove on a Mac keeps a file another row names in other case', async ($, on) => {
+  const other = '| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 9 | Moved | `D/Four.md` | TODO | opus |\n'
+  const mac: Record<string, string> = { 'queue-demo.md': QUEUE, 'queue-b.md': other, 'four.md': '# Fourth' }
+  fakeFolder(on, mac, { platform: 'macos' })
+  expect((await run($, 'queue-remove', 'demo 4')).text).toContain('was kept: another row in queue b names it.')
+})
+
+test('/queue-remove says so when it cannot look at a topic file that is there', async ($, on) => {
+  const files: Record<string, string> = { 'queue-demo.md': QUEUE, 'four.md': '# Fourth' }
+  const { ran } = fakeFolder(on, files, { refuseStat: true })
+  expect((await run($, 'queue-remove', '4')).text).toContain("Couldn't delete its topic file, queues/d/four.md; delete it by hand.")
+  expect(ran).toEqual([])
 })

@@ -14,11 +14,11 @@
 
 **Parallels.** <off | ask | auto> (chosen <date>; see the skill's Parallels section).
 
-**Go-ahead.** <ask | auto: start building without waiting when there's nothing to decide> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
+**Auto-start.** <off | on: start building without waiting when there's nothing to decide> (chosen <date>; see the skill's Auto-start, Auto-commit, and Clear section).
 
-**Commits.** <ask | auto: commit and merge without waiting when the Checks and review pass> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
+**Auto-commit.** <off | on: commit and merge without waiting when the Checks and review pass> (chosen <date>; see the skill's Auto-start, Auto-commit, and Clear section).
 
-**Clear.** <on: clear the conversation when I type next-session | off> (chosen <date>; see the skill's Go-ahead, Commits, and Clear section).
+**Clear.** <on: clear the conversation when I type next-session | off> (chosen <date>; see the skill's Auto-start, Auto-commit, and Clear section).
 
 **Notify.** <off | on: push a notification when a session stops for my decision or approval> (chosen <date>; see the skill's Notifications section).
 

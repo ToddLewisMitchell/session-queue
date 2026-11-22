@@ -1,5 +1,5 @@
 import type { EngineInterface } from 'claude-code'
-import { nextRow, openQueues, pickQueues, type Queue } from './queues'
+import { insideQueueFolder, nextRow, openQueues, pickQueues, type Queue } from './queues'
 
 // The context attached to a `next-session` prompt, so the session starts with
 // the queue file and the likely next row's topic file already in hand instead
@@ -15,11 +15,7 @@ const LIMIT = 90_000
 
 // The topic file (relative to the queue folder) of the likely next row.
 export function nextTopic(text: string): string | undefined {
-  const file = nextRow(text)?.topic
-  // A relative path inside the queue folder, nothing else (no `/x`, `\\x`,
-  // `C:x`, or `..`).
-  if (!file || /^(?:[\\/]|[A-Za-z]:)/.test(file) || file.split(/[\\/]/).includes('..')) return undefined
-  return file
+  return insideQueueFolder(nextRow(text)?.topic)
 }
 
 const block = (path: string, body: string) => `<file path="${path}">\n${body.trimEnd()}\n</file>`

@@ -55,8 +55,8 @@ async function runSession($: any, used: () => void, calls: string[]) {
 const turn = ($: any, reason = 'answer') => $.turn.complete({ answer: '', durationMs: 1, isAborted: reason === 'aborted', turnId: 't1', reason })
 
 const ALL_AUTO = [
-  '**Go-ahead.** auto (chosen 2026-11-20).',
-  '**Commits.** auto (chosen 2026-11-20).',
+  '**Auto-start.** on (chosen 2026-11-20).',
+  '**Auto-commit.** on (chosen 2026-11-20).',
   '**Clear.** auto (chosen 2026-11-20).',
   '**Auto-advance.** on: until 80% of the weekly usage limit (chosen 2026-11-20).',
 ].join('\n\n')
@@ -173,8 +173,8 @@ test('decide: each stop', () => {
   expect(stopOf(decide(q(FINISHED), ['1'], WEEKLY(10), opus))).toBe(undefined) // nothing new
   expect(stopOf(decide(q(FINISHED), undefined, WEEKLY(10), opus))).toBe(undefined) // no baseline
   expect(stopOf(decide(q(FINISHED.replace('**Auto-advance.** on', '**Auto-advance.** off')), [], WEEKLY(10), opus))).toBe(undefined)
-  expect(stopOf(decide(q(FINISHED.replace('**Commits.** auto', '**Commits.** approve')), [], WEEKLY(10), opus))).toBe(
-    'Go-ahead and Commits must be auto, and Clear on',
+  expect(stopOf(decide(q(FINISHED.replace('**Auto-commit.** on', '**Auto-commit.** off')), [], WEEKLY(10), opus))).toBe(
+    'Auto-start, Auto-commit, and Clear must be on',
   )
   expect(stopOf(decide(q(FINISHED), [], [], opus))).toBe('no weekly usage reading')
   expect(stopOf(decide(q(FINISHED), [], [...WEEKLY(10), { kind: 'five_hour', percentUsed: 92 }], opus))).toBe('five-hour usage is at 92%')
@@ -191,20 +191,22 @@ test('decide: each stop', () => {
 
 // --- The command ------------------------------------------------------------
 
-test('/queue-autoadvance 70 turns it on with the three auto settings; off leaves them', async ($, on) => {
+test('/queue-autoadvance 70 turns it on with the three auto settings, older lines renamed; off leaves them', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': queue(['| 1 | First | `d/one.md` | TODO | opus |'], '**Go-ahead.** ask\n\n**Commits.** approve\n\n**Clear.** auto\n') }
   fake(on, files, { weekly: 10 })
   await start($)
   const r = await ($ as any).command.run({ command: 'queue-autoadvance', args: '70%' })
-  expect(r.text).toBe('Queue demo: Auto-advance set to on until 70% of the weekly usage limit. Also set Go-ahead and Commits to auto.')
+  expect(r.text).toBe('Queue demo: Auto-advance set to on until 70% of the weekly usage limit. Also set Auto-start and Auto-commit to on.')
   const text = files['queue-demo.md']!
   expect(text).toMatch(/^\*\*Auto-advance\.\*\* on: until 70% of the weekly usage limit \(chosen /m)
-  expect(text).toContain('**Go-ahead.** auto')
-  expect(text).toContain('**Commits.** auto')
+  expect(text).toMatch(/^\*\*Auto-start\.\*\* on: /m)
+  expect(text).toMatch(/^\*\*Auto-commit\.\*\* on: /m)
+  expect(text).not.toContain('**Go-ahead.**')
+  expect(text).not.toContain('**Commits.**')
   expect(parseQueue('demo', 'queues', text).autoAdvance).toBe(70)
   const off = await ($ as any).command.run({ command: 'queue-autoadvance', args: 'off' })
   expect(off.text).toBe('Queue demo: Auto-advance set to off.')
-  expect(files['queue-demo.md']).toContain('**Commits.** auto')
+  expect(files['queue-demo.md']).toContain('**Auto-commit.** on')
   expect(parseQueue('demo', 'queues', files['queue-demo.md']!).autoAdvance).toBe(undefined)
   // `on` alone keeps the default.
   await ($ as any).command.run({ command: 'queue-autoadvance', args: 'on' })
@@ -216,6 +218,6 @@ test('/queue-autoadvance with Clear off says each value it set', async ($, on) =
   fake(on, files, { weekly: 10 })
   await start($)
   const r = await ($ as any).command.run({ command: 'queue-autoadvance', args: '70%' })
-  expect(r.text).toBe('Queue demo: Auto-advance set to on until 70% of the weekly usage limit. Also set Go-ahead and Commits to auto, and Clear to on.')
+  expect(r.text).toBe('Queue demo: Auto-advance set to on until 70% of the weekly usage limit. Also set Auto-start, Auto-commit, and Clear to on.')
   expect(files['queue-demo.md']).toMatch(/^\*\*Clear\.\*\* on: /m)
 })

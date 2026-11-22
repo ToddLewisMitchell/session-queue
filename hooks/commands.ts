@@ -11,10 +11,11 @@ import {
   nextRow,
   waitedFor,
   openQueues,
-  parseQueue,
   pickQueues,
+  readSetting,
+  RENAMED,
+  insideQueueFolder,
   rows,
-  settingValue,
   type Queue,
 } from './queues'
 
@@ -26,7 +27,8 @@ import {
 //   `(chosen <date>;` (a targeted line replacement, Principle 6). A missing
 //   line is added where the template puts it.
 // - `/queue-remove <id> [name]`: deletes one row from the session table
-//   (`removeRow`), leaving its topic file on disk. The name may come first.
+//   (`removeRow`) and its topic file, unless another row in the queue folder
+//   names that file (`deleteTopic`). The name may come first.
 // The queue name is needed only with two active queues (a queue waiting for
 // another isn't active); it and the value may come in either order, in any case.
 
@@ -38,18 +40,17 @@ export type Setting = {
   section: string
   // Each value, with the template's explanation where it has one.
   values: Record<string, string>
-  // The line's older name, replaced by a change when the new one is missing.
-  legacy?: string
   // Auto-advance only: a percentage (`80` or `80%`) also means `on`, until
   // that share of the weekly usage limit.
   percent?: true
   // Settings a change to `on` turns on too (Auto-advance needs all three).
   turnsOn?: readonly (readonly [name: string, value: string])[]
-  // Older values still found in queue files, and the value each reads as.
+  // Older values still found in queue files, and the value each reads as (an
+  // older line name's values are in RENAMED, queues.ts).
   older?: Record<string, string>
 }
 
-const GACC = 'Go-ahead, Commits, and Clear'
+const AUTO = 'Auto-start, Auto-commit, and Clear'
 export const SETTINGS: readonly Setting[] = [
   {
     command: 'queue-parallels',
@@ -57,42 +58,40 @@ export const SETTINGS: readonly Setting[] = [
     name: 'Parallels',
     section: 'Parallels',
     values: { off: '', ask: '', auto: '' },
-    legacy: 'Pace',
   },
   {
-    command: 'queue-go-ahead',
-    description: "Choose whether a session waits for your go-ahead before building: ask, or auto (go on when there's nothing to decide)",
-    name: 'Go-ahead',
-    section: GACC,
-    values: { ask: '', auto: "start building without waiting when there's nothing to decide" },
+    command: 'queue-autostart',
+    description: "Choose whether a session starts building without your go-ahead: off (wait for it), or on (go on when there's nothing to decide)",
+    name: 'Auto-start',
+    section: AUTO,
+    values: { off: '', on: "start building without waiting when there's nothing to decide" },
   },
   {
-    command: 'queue-commit',
-    description: 'Choose whether a session commits on its own: ask (wait for your approval), or auto (commit when the checks and review pass)',
-    name: 'Commits',
-    section: GACC,
-    values: { ask: '', auto: 'commit and merge without waiting when the Checks and review pass' },
-    older: { approve: 'ask' },
+    command: 'queue-autocommit',
+    description: 'Choose whether a session commits on its own: off (wait for your approval), or on (commit when the checks and review pass)',
+    name: 'Auto-commit',
+    section: AUTO,
+    values: { off: '', on: 'commit and merge without waiting when the Checks and review pass' },
   },
   {
     command: 'queue-autoclear',
     description: 'Choose whether next-session clears the conversation first: off (keep it), or on (clear it)',
     name: 'Clear',
-    section: GACC,
+    section: AUTO,
     values: { off: '', on: 'clear the conversation when I type next-session' },
     older: { auto: 'on' },
   },
   {
     command: 'queue-autoadvance',
     description:
-      'Choose whether the queue runs its next session by itself when one finishes: off, or on until a share of your weekly usage limit (80% unless you give one, e.g. 70%); on also turns on auto go-ahead, auto-commit, and auto-clear',
+      'Choose whether the queue runs its next session by itself when one finishes: off, or on until a share of your weekly usage limit (80% unless you give one, e.g. 70%); on also turns on auto-start, auto-commit, and auto-clear',
     name: 'Auto-advance',
-    section: GACC,
+    section: AUTO,
     values: { off: '', on: '' },
     percent: true,
     turnsOn: [
-      ['Go-ahead', 'auto'],
-      ['Commits', 'auto'],
+      ['Auto-start', 'on'],
+      ['Auto-commit', 'on'],
       ['Clear', 'on'],
     ],
   },
@@ -105,18 +104,22 @@ export const SETTINGS: readonly Setting[] = [
   },
 ]
 
-// The settings lines in the template's order, for placing a missing one. `Pace`
-// is the older name of the Parallels line, still found in older queues.
-const ORDER = ['Branching', 'Parallels', 'Pace', 'Go-ahead', 'Commits', 'Clear', 'Auto-advance', 'Notify']
+// The settings lines in the template's order, for placing a missing one, each
+// renamed line's older name beside it (RENAMED, queues.ts).
+const ORDER = ['Branching', 'Parallels', 'Pace', 'Auto-start', 'Go-ahead', 'Auto-commit', 'Commits', 'Clear', 'Auto-advance', 'Notify']
 
-// The value a queue's line gives the setting named `name`, an older value
-// read as its new one (`approve` as `ask`), so comparing with a value from the
-// command doesn't take an old line for a different setting.
+// The value a queue's line gives the setting named `name`, an older line or
+// value read as its new one (`Commits.** auto` as Auto-commit `on`, Clear's
+// `auto` as `on`), so comparing with a value from the command doesn't take an
+// old line for a different setting.
 export function currentValue(text: string, name: string) {
-  const v = settingValue(text, name)
+  const v = readSetting(text, name)
   const older = SETTINGS.find(s => s.name === name)?.older
   return v !== undefined && older && Object.hasOwn(older, v) ? older[v] : v
 }
+
+// The skill's older section names a line's notes may still point at.
+const OLD_SECTION = /\b(?:Pace|Go-ahead, Commits, and Clear) section\b/
 
 // `[^\\r\\n]*` rather than `.*`, so a Windows line ending stays.
 const lineOf = (name: string) => new RegExp(`^\\*\\*${name}\\.\\*\\*[^\\r\\n]*`, 'mi')
@@ -132,12 +135,11 @@ function today(ms: number) {
 // after the closest earlier settings line (else before the closest later one,
 // else before the first `##` heading, else at the end).
 export function setLine(text: string, s: Setting, value: string, date: string, why = s.values[value]) {
-  const old = lineOf(s.name).exec(text) ?? (s.legacy ? lineOf(s.legacy).exec(text) : null)
-  // The old line's notes after `(chosen <date>;`, kept (an older name's section
-  // renamed); else the template's.
-  const notes = old
-    ? /\(chosen [^;)]*;\s*(.*)\)\.?\s*$/.exec(old[0])?.[1]?.replace(new RegExp(`\\b${s.legacy ?? s.name} section\\b`), `${s.section} section`)
-    : undefined
+  const legacy = RENAMED[s.name]?.from
+  const old = lineOf(s.name).exec(text) ?? (legacy ? lineOf(legacy).exec(text) : null)
+  // The old line's notes after `(chosen <date>;`, kept (a renamed section's
+  // name updated); else the template's.
+  const notes = old ? /\(chosen [^;)]*;\s*(.*)\)\.?\s*$/.exec(old[0])?.[1]?.replace(OLD_SECTION, `${s.section} section`) : undefined
   const line = `**${s.name}.** ${value}${why ? `: ${why}` : ''} (chosen ${date}; ${notes ?? `see the skill's ${s.section} section`}).`
   if (old) return text.slice(0, old.index) + line + text.slice(old.index + old[0].length)
   const nl = text.includes('\r\n') ? '\r\n' : '\n'
@@ -156,23 +158,14 @@ export function setLine(text: string, s: Setting, value: string, date: string, w
 }
 
 // Sets one settings line of queue `q`'s file, re-read just before writing so
-// an edit since the read isn't lost. `value` may be worked out from that text
-// (the pane's buttons step on from the current value). Used by the commands
-// and the queue pane's settings buttons (pane.tsx). Auto-advance `on` keeps
-// the percentage given, else the line's own, else the default, and turns on
-// the settings it needs in the same write (`also`, the ones it changed).
-// Returns the value written, or why it couldn't.
-export async function writeSetting(
-  $: EngineInterface,
-  q: Queue,
-  s: Setting,
-  value: string | ((current: Queue) => string),
-  percent?: number,
-) {
+// an edit since the read isn't lost. Auto-advance `on` keeps the percentage
+// given, else the line's own, else the default, and turns on the settings it
+// needs in the same write (`also`, the ones it changed). Returns the value
+// written, or why it couldn't.
+async function writeSetting($: EngineInterface, q: Queue, s: Setting, v: string, percent?: number) {
   const path = `${q.dir}/queue-${q.name}.md`
   try {
     const current = await $.fs.read(path)
-    const v = typeof value === 'string' ? value : value(parseQueue(q.name, q.dir, current))
     const date = today(await $.clock.now())
     const on = s.percent && v === 'on'
     const why = on ? `until ${percent ?? advancePercent(current) ?? DEFAULT_PERCENT}% of the weekly usage limit` : undefined
@@ -195,7 +188,7 @@ export async function writeSetting(
 // The waiting queues an unnamed change left on another value, as a sentence
 // (empty when none): a queue that copied these settings isn't left behind
 // unseen.
-export function keptBy(queues: Queue[], s: Setting, value: string) {
+function keptBy(queues: Queue[], s: Setting, value: string) {
   const waiting = queues.filter(o => isWaiting(o, queues) && currentValue(o.text, s.name) !== value)
   if (waiting.length === 0) return ''
   return `Waiting ${waiting.length > 1 ? 'queues' : 'queue'} ${waiting.map(o => o.name).join(', ')} kept ${s.name} as it was; add the name to change ${waiting.length > 1 ? 'them' : 'it'} too.`
@@ -206,8 +199,8 @@ export const list = (xs: readonly string[]) =>
   xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')}, and ${xs.at(-1)}`
 
 // The settings a change turned on with it, each with the value it was set to,
-// grouped by value in `turnsOn` order: `Go-ahead and Commits to auto, and
-// Clear to on`.
+// grouped by value in `turnsOn` order: `Auto-start, Auto-commit, and Clear
+// to on`.
 function alsoSet(s: Setting, names: readonly string[]) {
   const groups = new Map<string, string[]>()
   for (const [name, value] of s.turnsOn ?? []) if (names.includes(name)) groups.set(value, [...(groups.get(value) ?? []), name])
@@ -288,6 +281,79 @@ export function removeRow(text: string, id: string) {
   return { text: rest, row, others, notes }
 }
 
+// A topic path as a comparable spelling: `/` for `\\`, no `.` or empty parts,
+// and lowercased where file names ignore case (anywhere but plain Linux; an
+// unknown platform too, since a false match only keeps a file).
+const samePathAs = (file: string, platform: string | undefined) => {
+  const norm = (p: string) => {
+    const parts = p.replace(/\\/g, '/').split('/').filter(x => x !== '' && x !== '.').join('/')
+    return platform === 'linux' ? parts : parts.toLowerCase()
+  }
+  const want = norm(file)
+  return (r: { topic: string | undefined }) => r.topic !== undefined && norm(r.topic) === want
+}
+
+// Deletes the topic file of a row `/queue-remove` took out of `q`'s table
+// (`rest`, the queue text without it). Returns the reply's line about it and
+// what became of it: `deleted`, `kept` (still there), or `none` (no topic
+// file, or already missing). Kept when the path isn't a relative one inside
+// the queue folder, or when another row, in this queue file or any other in
+// the folder (closed ones too), still names it (a row moved to another queue
+// points at the same file). The engine's file API can't delete, so this runs
+// `rm`, or PowerShell's Remove-Item on Windows, with the path as an argument
+// or a variable, never shell text.
+async function deleteTopic($: EngineInterface, q: Queue, topic: string | undefined, rest: string) {
+  const kept = (text: string) => ({ text, state: 'kept' as 'kept' | 'deleted' | 'none' })
+  const none = { text: '', state: 'none' as const }
+  if (topic === undefined) return none
+  const file = insideQueueFolder(topic)
+  const path = `${q.dir}/${topic}`
+  if (!file) return kept(`Its topic file, ${topic}, is outside the queue folder, so it was kept.`)
+  const platform = await $.session
+    .info()
+    .then(i => i.platform)
+    .catch(() => undefined)
+  const same = samePathAs(file, platform)
+  const others: string[] = rows(rest).some(same) ? [q.name] : []
+  try {
+    for (const e of await $.fs.list(q.dir)) {
+      const m = e.kind === 'file' ? /^queue-(.+)\.md$/.exec(e.name) : null
+      if (!m || m[1] === q.name) continue
+      if (rows(await $.fs.read(`${q.dir}/${e.name}`)).some(same)) others.push(m[1]!)
+    }
+  } catch {
+    return kept(`Couldn't check whether another row names its topic file, so ${path} was kept.`)
+  }
+  if (others.length > 0) return kept(`Its topic file, ${path}, was kept: another row in queue ${list(others)} names it.`)
+  const failed = kept(`Couldn't delete its topic file, ${path}; delete it by hand.`)
+  // A child process may not take a relative path from the same folder as the
+  // file calls, so it gets an absolute one: the folder resolved, then the name
+  // (a link is deleted itself, not where it leads).
+  let target: string
+  try {
+    const own = await $.fs.stat(path)
+    if (own.kind !== 'file' && !own.isLink) return kept(`Its topic file, ${path}, isn't a plain file, so it was kept.`)
+    const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    const folder = (await $.fs.stat(path.slice(0, cut), { resolve: true })).realPath
+    if (!folder) return failed
+    const sep = folder.includes('\\') && !folder.includes('/') ? '\\' : '/'
+    target = `${folder.replace(/[\\/]+$/, '')}${sep}${path.slice(cut + 1)}`
+  } catch {
+    // Missing: nothing to delete. Anything else (a refused read) is a failure.
+    return (await $.fs.exists(path).catch(() => true)) ? failed : none
+  }
+  try {
+    const r =
+      platform === 'windows'
+        ? await $.process.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', 'Remove-Item -LiteralPath $env:SESSION_QUEUE_FILE'], {
+            env: { SESSION_QUEUE_FILE: target },
+          })
+        : await $.process.run(['rm', '-f', '--', target])
+    if (r.exitCode === 0 && !(await $.fs.exists(target))) return { text: `Its topic file, ${path}, was deleted.`, state: 'deleted' as const }
+  } catch {}
+  return failed
+}
+
 // Declares the commands; called from register.ts's own `session.start` hook
 // (the engine takes one unmatched hook per event).
 export async function registerCommands($: EngineInterface) {
@@ -297,7 +363,7 @@ export async function registerCommands($: EngineInterface) {
   await $.command
     .register({
       name: 'queue-remove',
-      description: "Delete a row from the queue's session table by its id (its topic file stays); a running row can't be removed",
+      description: "Delete a row from the queue's session table by its id, with its topic file; a running row can't be removed",
       argumentHint: '<id> [queue]',
     })
     .catch(() => undefined)
@@ -364,9 +430,14 @@ export function commands(on: On) {
     await refresh($, { quiet: true }).catch(() => undefined)
     const { row } = r
     const lines = [`Queue ${q.name}: removed row ${row.id} (${row.session}).`]
-    if (row.topic) lines.push(`Its topic file, ${q.dir}/${row.topic}, is still there.`)
+    const topic = await deleteTopic($, q, row.topic, r.text)
+    if (topic.text) lines.push(topic.text)
     if (/\s\+\s/.test(row.session))
-      lines.push(`The tasks folded into it (+ in its Session cell) went with it; they're in its topic file's Folded in section.`)
+      lines.push(
+        `The tasks folded into it (+ in its Session cell) went with it${
+          topic.state === 'deleted' ? ', and with its topic file' : topic.state === 'kept' ? "; they're in its topic file's Folded in section" : ''
+        }.`,
+      )
     if (/^PAUSED\b/i.test(row.status)) lines.push(`It was ${row.status}; its branch or worktree, if any, is left alone.`)
     if (r.others.length > 0)
       lines.push(`${r.others.length > 1 ? 'Rows' : 'Row'} ${list(r.others.map(o => `${o.id} (${o.status})`))} still ${r.others.length > 1 ? 'name' : 'names'} it; edit ${r.others.length > 1 ? 'them' : 'it'} by hand if needed.`)

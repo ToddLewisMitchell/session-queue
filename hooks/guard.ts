@@ -3,11 +3,11 @@ import type { EngineInterface, On } from 'claude-code'
 import { activeQueues, openQueues } from './queues'
 import { noteAutoCommit } from './settings-state'
 
-// The commit guard: SKILL.md Principle 2 and the Commits setting, enforced
+// The commit guard: SKILL.md Principle 2 and the Auto-commit setting, enforced
 // on the model's Bash calls while a queue is open.
 // - Anything that makes a commit or a merge (`commit`, `merge`, `pull`,
 //   `cherry-pick`, `revert`, `am`, `rebase`) brings up the permission dialog
-//   unless every open queue's Commits is `auto`.
+//   unless every open queue's Auto-commit is `on`.
 // - `git push` always does: pushing always needs approval.
 // - A subagent's commit, merge, or push is refused: it can't be asked, and
 //   the conversation that launched it commits for it (parallel-sessions.md).
@@ -19,7 +19,7 @@ import { noteAutoCommit } from './settings-state'
 //   a short approval ("commit", or "yes" to a reply about the commit;
 //   `approvalOf`): they have just answered the question the dialog would ask.
 //   A push still asks.
-// - A commit or merge let through because Commits is `auto` is recorded, so
+// - A commit or merge let through because Auto-commit is `on` is recorded, so
 //   its row in the transcript says so (display.tsx).
 
 export type GitAction = 'commit' | 'merge' | 'push' | 'force-add' | 'unreadable'
@@ -364,7 +364,7 @@ export function guard(on: On) {
       const asks = active.some(q => !q.autoCommit)
       if (asks && !(await read($, approved))) {
         const what = actions.has('commit') && actions.has('merge') ? 'commit and merge' : actions.has('commit') ? 'commit' : 'merge'
-        return { decision: 'ask', reason: `${NAME}: the queue's Commits setting is ask. Allow this ${what}?` }
+        return { decision: 'ask', reason: `${NAME}: the queue's Auto-commit setting is off. Allow this ${what}?` }
       }
       // For the note on the call's row (display.tsx).
       if (!asks && active.length > 0 && e.tool_use_id !== undefined) await noteAutoCommit($, e.tool_use_id).catch(() => undefined)

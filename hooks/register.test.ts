@@ -32,7 +32,7 @@ async function footer($: any, modes: string[] = []) {
 }
 
 // The footer's settings: each one's value, missing ones at their defaults.
-const DEFAULTS = { parallels: 'ask', 'go-ahead': 'ask', commit: 'ask', 'auto-clear': 'on', 'auto-advance': 'off', notify: 'off' }
+const DEFAULTS = { parallels: 'ask', 'auto-start': 'off', 'auto-commit': 'off', 'auto-clear': 'on', 'auto-advance': 'off', notify: 'off' }
 const shown = (o: Partial<typeof DEFAULTS> = {}) =>
   Object.entries({ ...DEFAULTS, ...o })
     .map(([k, v]) => `${k}: ${v}`)
@@ -94,18 +94,23 @@ test('no queue folder: the old status line is cleared and the footer is left alo
   expect(await footer($, ['focus'])).toBe('focus')
 })
 
-test('auto go-ahead and auto-commit show as auto', async ($, on) => {
+test('auto-start and auto-commit show as on', async ($, on) => {
   fakeQueues(on, {
-    'queue-demo.md': '**Pace.** speed\n\n**Go-ahead.** auto (chosen 2026-11-19)\n\n**Commits.** auto (chosen 2026-11-19)\n',
+    'queue-demo.md': '**Pace.** speed\n\n**Auto-start.** on (chosen 2026-11-21)\n\n**Auto-commit.** on (chosen 2026-11-21)\n',
   })
   await start($)
-  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto', 'go-ahead': 'auto', commit: 'auto' })}`)
+  expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto', 'auto-start': 'on', 'auto-commit': 'on' })}`)
 })
 
-test('an older Commits approve reads as ask', async ($, on) => {
-  fakeQueues(on, { 'queue-demo.md': '**Go-ahead.** ask\n\n**Commits.** approve\n' })
+test('older Go-ahead and Commits lines read as Auto-start and Auto-commit; a new line wins', async ($, on) => {
+  fakeQueues(on, {
+    'queue-a.md': '**Go-ahead.** auto\n\n**Commits.** approve\n',
+    'queue-b.md': '**Go-ahead.** ask\n\n**Commits.** auto\n\n**Auto-commit.** off\n',
+    // An older value on a new line, as a copy from an older queue may write.
+    'queue-c.md': '**Auto-start.** ask\n\n**Auto-commit.** auto\n',
+  })
   await start($)
-  expect(await footer($)).toBe(`queue · ${shown()}`)
+  expect(await footer($)).toBe(`queue a · ${shown({ 'auto-start': 'on' })} & queue b · ${shown()} & queue c · ${shown({ 'auto-commit': 'on' })}`)
 })
 
 test('auto-advance shows the weekly share it runs until', async ($, on) => {
@@ -116,11 +121,11 @@ test('auto-advance shows the weekly share it runs until', async ($, on) => {
 
 test('two queues with different settings are named', async ($, on) => {
   fakeQueues(on, {
-    'queue-a.md': '**Pace.** balanced\n\n**Commits.** auto\n',
+    'queue-a.md': '**Pace.** balanced\n\n**Auto-commit.** on\n',
     'queue-b.md': '**Pace.** balanced\n',
   })
   await start($)
-  expect(await footer($)).toBe(`queue a · ${shown({ commit: 'auto' })} & queue b · ${shown()}`)
+  expect(await footer($)).toBe(`queue a · ${shown({ 'auto-commit': 'on' })} & queue b · ${shown()}`)
 })
 
 // --- Clear before next-session ---------------------------------------------

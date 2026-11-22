@@ -7,7 +7,7 @@ import { setSettings } from './settings-state'
 // (pane-state.ts) and the active queues' settings (settings-state.ts), which
 // redraws the pane and the settings in the prompt footer (display.tsx).
 // Called by register.ts (session start, after each turn) and by the commands
-// (commands.ts, pane.tsx, the pane's settings buttons). A settings change since
+// (commands.ts, pane.tsx). A settings change since
 // the last read, a hand edit included, shows as a toast, unless `quiet`: a
 // slash command reports its own change.
 

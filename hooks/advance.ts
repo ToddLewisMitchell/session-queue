@@ -10,9 +10,8 @@ import { activeQueues, nextRowOf, openQueues, rows, type Queue, type Row } from 
 //
 // It goes on only when nothing needs the user, and otherwise says in a toast
 // why it stopped:
-// - Go-ahead and Commits are `auto` and Clear `on` (turning auto-advance on with
-//   its command or the pane's button turns them on; turning one off later
-//   stops it);
+// - Auto-start, Auto-commit, and Clear are `on` (turning auto-advance on with
+//   its command turns them on; turning one off later stops it);
 // - this conversation ran `next-session` (typed, or auto-advance's own), a
 //   row went DONE since then, and no row is IN PROGRESS (a session that
 //   paused, asked, or stopped for approval leaves its row unfinished, so the
@@ -40,7 +39,7 @@ export function decide(q: Queue, before: readonly string[] | undefined, limits: 
   const percent = q.autoAdvance
   if (percent === undefined || before === undefined) return undefined
   if (!doneIds(q.text).some(id => !before.includes(id))) return undefined
-  if (!q.autoGoAhead || !q.autoCommit || !q.clear) return { stop: 'Go-ahead and Commits must be auto, and Clear on' }
+  if (!q.autoStart || !q.autoCommit || !q.clear) return { stop: 'Auto-start, Auto-commit, and Clear must be on' }
   const all = rows(q.text)
   const running = all.find(r => /^IN PROGRESS\b/i.test(r.status))
   if (running) return { stop: `${running.id} is still in progress` }
@@ -126,7 +125,7 @@ export async function afterTurn($: EngineInterface, submit: (text: string) => Pr
 }
 
 // The timer's end: still pending, the box still empty, and `decide` still
-// advancing to the same row (a setting changed by the pane, a new claim, or
+// advancing to the same row (a setting changed since, a new claim, or
 // the usage since is seen).
 async function fire($: EngineInterface, mine: NonNullable<typeof pending>, submit: (text: string) => Promise<unknown>) {
   if (pending?.gen !== mine.gen) return

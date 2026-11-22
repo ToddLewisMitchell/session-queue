@@ -21,6 +21,34 @@ export function settingValue(text: string, name: string): string | undefined {
   return new RegExp(`^\\*\\*${escaped}\\.\\*\\*[ \\t]*([\\w-]+)`, 'mi').exec(text)?.[1]?.toLowerCase()
 }
 
+// Settings lines renamed since older queues were written: each new name's
+// older one, and the new value each older value reads as, on either line (a
+// copied `**Auto-commit.** auto` is on). A queue keeps its older line until the
+// setting is changed (`setLine` in commands.ts).
+export const RENAMED: Record<string, { from: string; values: Record<string, string> }> = {
+  Parallels: { from: 'Pace', values: { economy: 'off', balanced: 'ask', speed: 'auto' } },
+  'Auto-start': { from: 'Go-ahead', values: { auto: 'on', ask: 'off' } },
+  'Auto-commit': { from: 'Commits', values: { auto: 'on', ask: 'off', approve: 'off' } },
+}
+
+// A setting's value: its own line's, else its older line's read as the value
+// it became (undefined for an older value that isn't one).
+export function readSetting(text: string, name: string): string | undefined {
+  const v = settingValue(text, name)
+  const r = RENAMED[name]
+  if (!r) return v
+  if (v !== undefined) return Object.hasOwn(r.values, v) ? r.values[v] : v
+  const old = settingValue(text, r.from)
+  return old !== undefined && Object.hasOwn(r.values, old) ? r.values[old] : undefined
+}
+
+// A topic file's path from the table, when it's a relative path inside the
+// queue folder (no `/x`, `\\x`, `C:x`, or `..`); else undefined.
+export function insideQueueFolder(file: string | undefined) {
+  if (!file || /^(?:[\\/]|[A-Za-z]:)/.test(file) || file.split(/[\\/]/).includes('..')) return undefined
+  return file
+}
+
 // Whether a Clear line's value turns the clear on: `on`, an older queue's
 // `auto`, or no line. Any other word (`off`, a typo) leaves it off, so a hand
 // edit never clears a conversation the user meant to keep.
@@ -47,7 +75,7 @@ export type Queue = {
   dir: string
   text: string
   parallels: Parallels
-  autoGoAhead: boolean
+  autoStart: boolean
   autoCommit: boolean
   clear: boolean
   notify: boolean
@@ -58,8 +86,6 @@ export type Queue = {
 }
 
 const PARALLELS: readonly string[] = ['off', 'ask', 'auto']
-// An older queue's Pace line, read as the Parallels setting it became.
-const FROM_PACE: Record<string, Parallels> = { economy: 'off', balanced: 'ask', speed: 'auto' }
 
 // The queue folder sits at the main checkout's root. A relative path follows
 // the shell's `cd`, so after `cd src` `queues` isn't there (or is some other
@@ -68,7 +94,10 @@ const FROM_PACE: Record<string, Parallels> = { economy: 'off', balanced: 'ask', 
 // (`.claude/worktrees/...`) doesn't have it when git ignores it, so then look
 // in the main checkout, found through the engine's working-copy lookup, else
 // (an engine before `$.vcs`, 2.1.328 and older) git's common dir, run from the
-// project root. A folder counts only when it holds a queue file.
+// project root. Last, a session started inside a queue folder (such as a
+// topic folder, `queues/<name>/`) looks in that queue folder, the innermost
+// `queues` its project root is in; never further up, so another project's
+// queue folder isn't taken. A folder counts only when it holds a queue file.
 async function listed($: EngineInterface, dir: string) {
   try {
     const entries = await $.fs.list(dir)
@@ -78,47 +107,54 @@ async function listed($: EngineInterface, dir: string) {
   }
 }
 
-async function queueEntries($: EngineInterface) {
-  const here = await listed($, 'queues')
-  if (here) return here
-  const root = await $.session.root().catch(() => undefined)
+// The innermost folder named `queues` that `dir` is, or is inside.
+const enclosingQueues = (dir: string) => /^(.*[\\/]queues)(?:[\\/]|$)/.exec(dir)?.[1]
+
+// The main checkout's root, from the engine's working-copy lookup, else git.
+async function mainCheckout($: EngineInterface, root: string | undefined) {
   if (root) {
-    const cwd = await $.session.cwd().catch(() => undefined)
-    if (cwd !== root) {
-      const atRoot = await listed($, `${root}/queues`)
-      if (atRoot) return atRoot
-    }
     let copy: Awaited<ReturnType<typeof $.vcs.detect>> | undefined
     try {
       copy = await $.vcs.detect({ path: root })
     } catch {}
-    if (copy) {
-      const main = copy.mainRoot ?? copy.root
-      return main === root || main === cwd ? undefined : listed($, `${main}/queues`)
-    }
+    if (copy) return copy.mainRoot ?? copy.root
   }
   try {
     const r = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], root ? { cwd: root } : undefined)
     const common = r.stdout.trim()
-    if (r.exitCode !== 0 || !common.endsWith('/.git')) return undefined
-    return listed($, `${common.slice(0, -'/.git'.length)}/queues`)
+    return r.exitCode === 0 && common.endsWith('/.git') ? common.slice(0, -'/.git'.length) : undefined
   } catch {
     return undefined
   }
 }
 
+async function queueEntries($: EngineInterface) {
+  const here = await listed($, 'queues')
+  if (here) return here
+  const root = await $.session.root().catch(() => undefined)
+  const cwd = await $.session.cwd().catch(() => undefined)
+  if (root && cwd !== root) {
+    const atRoot = await listed($, `${root}/queues`)
+    if (atRoot) return atRoot
+  }
+  const main = await mainCheckout($, root)
+  if (main && main !== root && main !== cwd) {
+    const inMain = await listed($, `${main}/queues`)
+    if (inMain) return inMain
+  }
+  const enclosing = root && enclosingQueues(root)
+  return enclosing ? listed($, enclosing) : undefined
+}
+
 export function parseQueue(name: string, dir: string, text: string): Queue {
-  const set = settingValue(text, 'Parallels')
-  const pace = settingValue(text, 'Pace')
-  const parallels =
-    set !== undefined ? (PARALLELS.includes(set) ? (set as Parallels) : undefined) : pace !== undefined && Object.hasOwn(FROM_PACE, pace) ? FROM_PACE[pace] : undefined
+  const set = readSetting(text, 'Parallels')
   return {
     name,
     dir,
     text,
-    parallels: parallels ?? 'ask',
-    autoGoAhead: settingValue(text, 'Go-ahead') === 'auto',
-    autoCommit: settingValue(text, 'Commits') === 'auto',
+    parallels: set !== undefined && PARALLELS.includes(set) ? (set as Parallels) : 'ask',
+    autoStart: readSetting(text, 'Auto-start') === 'on',
+    autoCommit: readSetting(text, 'Auto-commit') === 'on',
     clear: clearOn(settingValue(text, 'Clear')),
     notify: settingValue(text, 'Notify') === 'on',
     autoAdvance: advancePercent(text),
