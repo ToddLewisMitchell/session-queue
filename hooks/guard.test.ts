@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { approvalOf, gitActions } from './guard'
+import { approvalOf, clauseRecommendsCommit, gitActions, picksRecommended } from './guard'
 
 // --- Reading the command line ----------------------------------------------
 
@@ -217,6 +217,76 @@ test('from the phone counts too', async ($, on) => {
   fake(on, APPROVE)
   await say($, 'yes', 'bridge')
   expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test('from claude -p or the Agent SDK counts too', async ($, on) => {
+  fake(on, APPROVE)
+  await say($, 'Approved. Commit it.', 'sdk')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test("picking Claude's recommended option is read as one; anything else is not", () => {
+  for (const t of [
+    "Stop this session here; I'll come back to it later. Use your recommended option for the partial work.",
+    'Use your recommendation.', 'go with the ★ one', 'Go with your recommendations.', 'take the recommended one please',
+  ])
+    expect([t, picksRecommended(t)]).toEqual([t, true])
+  for (const t of [
+    'what do you recommend?', 'what do you recommend', 'Explain your recommendation first.', 'I need to think about your recommendation.',
+    "don't use your recommendation", 'dont use your recommendation', 'not the recommended one',
+    'use the recommended one but fix the test first', 'Ignore your recommendation and leave it uncommitted',
+    'take the second option rather than your recommended one', 'the first one', 'option 1', 'stop here', 'yes',
+    'use your recommended option ' + 'and then some more words '.repeat(6),
+  ])
+    expect([t, picksRecommended(t)]).toEqual([t, false])
+})
+
+test('the recommended option counts as a commit only when its own clause says so', () => {
+  for (const r of [
+    'Partial work: ★ a work-in-progress commit on q/1-x, or leave it uncommitted. Which?',
+    'Where should it go? Leave it uncommitted, or ★ commit it as WIP on q/1-x.',
+    'I recommend a WIP commit on the session branch.',
+  ])
+    expect([r, clauseRecommendsCommit(r)]).toEqual([r, true])
+  for (const r of [
+    "Two questions: ★ compute it in the route, or add a table. I'll commit on q/3-x when done.",
+    '★ keep the route. Auto-commits are on.',
+    'Proposed commit message: Add x. Approve?',
+  ])
+    expect([r, clauseRecommendsCommit(r)]).toEqual([r, false])
+})
+
+test('a pick of the recommended commit approves it', async ($, on) => {
+  fake(on, APPROVE, { reply: 'Partial work: ★ a work-in-progress commit on q/1-x, or leave it uncommitted. Which?' })
+  await say($, 'Use your recommended option.')
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test('a pick while a row waits for approval approves its commit', async ($, on) => {
+  const table = '| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 1 | X | `a/x.md` | IN PROGRESS 2026-11-22 (waiting for approval; s) | opus |\n'
+  fake(on, { 'queue-a.md': APPROVE['queue-a.md'] + table })
+  await say($, "Stop this session here; I'll come back to it later. Use your recommended option for the partial work.")
+  expect((await check($, 'git commit -m x')).decision).toBe('allow')
+})
+
+test("another conversation's row waiting for approval doesn't make a pick here approve", async ($, on) => {
+  const table = '| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 1 | X | `a/x.md` | IN PROGRESS 2026-11-22 (waiting for approval; s) | opus |\n'
+  fake(on, { 'queue-a.md': APPROVE['queue-a.md'] + table }, { reply: 'Two questions: ★ compute it in the route, or add a table.' })
+  await say($, 'Go with your recommendations.')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
+})
+
+test('a pick of a recommendation about something else is no approval, though the reply mentions a commit', async ($, on) => {
+  const table = '| # | Session | Topic file | Status | Model |\n|---|---|---|---|---|\n| 1 | X | `a/x.md` | IN PROGRESS 2026-11-22 (scope; s) | opus |\n'
+  fake(on, { 'queue-a.md': APPROVE['queue-a.md'] + table }, { reply: "Two questions: ★ compute it in the route, or add a table. I'll commit on q/3-x when done." })
+  await say($, 'Go with your recommendations.')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
+})
+
+test('the Auto-commit setting named in a reply is not a reply about a commit', async ($, on) => {
+  fake(on, APPROVE, { reply: 'Scope: the route. Auto-commits are off for this queue. Go ahead?' })
+  await say($, 'yes')
+  expect((await check($, 'git commit -m x')).decision).toBe('ask')
 })
 
 test('the next prompt takes the approval back', async ($, on) => {

@@ -1,6 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On } from 'claude-code'
-import { activeQueues, openQueues } from './queues'
+import { activeQueues, openQueues, rows } from './queues'
 import { noteAutoCommit } from './settings-state'
 
 // The commit guard: SKILL.md Principle 2 and the Auto-commit setting, enforced
@@ -17,8 +17,9 @@ import { noteAutoCommit } from './settings-state'
 //   asks too: the guard fails closed.
 // - The commit-or-merge dialog is skipped when the user's latest message was
 //   a short approval ("commit", or "yes" to a reply about the commit;
-//   `approvalOf`): they have just answered the question the dialog would ask.
-//   A push still asks.
+//   `approvalOf`), or picked Claude's recommended option when that option
+//   was the commit ("use your recommendation"; `picksRecommended`): they have
+//   just answered the question the dialog would ask. A push still asks.
 // - A commit or merge let through because Auto-commit is `on` is recorded, so
 //   its row in the transcript says so (display.tsx).
 
@@ -287,6 +288,51 @@ export function approvalOf(text: string): Approval {
   return words.some(w => NAMED.has(w)) ? 'named' : words.some(w => BARE.has(w)) ? 'bare' : undefined
 }
 
+// A reply that picks the option Claude recommended ("use your recommended
+// option", "go with the ★ one"), as the user answers a commit proposal or the
+// work-in-progress question when pausing (SKILL.md, Stopping early). It needs
+// a choosing verb before "your/the ... recommended" or "★", so a question or
+// a request about the recommendation ("explain your recommendation") isn't
+// one; and nothing that turns it around ("dont", "rather", "ignore"), no
+// question mark, and at most MAX_PICK_WORDS words. A position ("the first
+// one") isn't a pick: the ★ option isn't always first. It approves only when
+// the recommended option was the commit (`recommendsCommit`).
+const PICKS = /\b(use|go with|take|pick|do|follow|choose|apply|stick with|go for)\s+(your|the)\s+(\S+\s+)?(★|recommend(ed|ation|ations)?\b)/i
+const TURNS = /\b(no|not|never|but|except|instead|without|skip|wait|hold|dont|cant|wont|rather|ignore|against|other|second|else)\b|n['’]t\b/i
+const MAX_PICK_WORDS = 30
+
+export function picksRecommended(text: string): boolean {
+  if (text.includes('?') || !PICKS.test(text) || TURNS.test(text)) return false
+  return text.split(/\s+/).filter(Boolean).length <= MAX_PICK_WORDS
+}
+
+// Whether the option Claude recommended was a commit or merge: a clause of
+// its last reply that holds the ★ or "recommend" also says commit, merge, or
+// work in progress; or the reply mentions a commit or merge while a row of an
+// active queue is `waiting for approval` (its commit proposed: SKILL.md,
+// workflow 3, step 6; the mention keeps another conversation's proposal from
+// counting here). A scope message whose ★ picks a design and mentions a
+// commit elsewhere doesn't count.
+export function clauseRecommendsCommit(reply: string): boolean {
+  return reply
+    .split(/[.;:\n?!]|,\s*or\b/)
+    .some(c => /★|recommend/i.test(c) && /\b(commit|merge|wip)|work[- ]in[- ]progress/i.test(c.replace(AUTO_COMMIT, '')))
+}
+
+async function recommendsCommit($: EngineInterface) {
+  const recent = await $.session.messages({ last: 6 })
+  if ('deny' in recent) return false
+  const reply = [...recent].reverse().find(m => m.role === 'assistant' && m.text.trim() !== '')
+  if (reply === undefined) return false
+  if (clauseRecommendsCommit(reply.text)) return true
+  if (!/\b(commit|merge)/i.test(reply.text.replace(AUTO_COMMIT, ''))) return false
+  const queues = activeQueues(await openQueues($))
+  return queues.some(q => rows(q.text).some(r => /^IN PROGRESS\b.*\bwaiting for approval\b/i.test(r.status)))
+}
+
+// The setting's name ("Auto-commit is on") says nothing about a commit.
+const AUTO_COMMIT = /\bauto[-\s]?commits?\b/gi
+
 // Whether the user's latest message approved a commit or merge, kept in this
 // session's `$.state` (each conversation its own) and written by `notePrompt`.
 // It holds until the next prompt, so one approval covers the session's commit,
@@ -297,15 +343,16 @@ async function replyIsAboutCommit($: EngineInterface) {
   const recent = await $.session.messages({ last: 6 })
   if ('deny' in recent) return false
   const reply = [...recent].reverse().find(m => m.role === 'assistant' && m.text.trim() !== '')
-  return reply !== undefined && /\b(commit|merge)/i.test(reply.text)
+  return reply !== undefined && /\b(commit|merge)/i.test(reply.text.replace(AUTO_COMMIT, ''))
 }
 
 // Called by `register.ts` for every prompt before anything else reads it, and
 // with `undefined` when a session starts (a /clear). Only the user's own
-// typing (terminal or phone) can approve, and any other prompt that starts a
-// turn, or a slash command, takes the approval back. A prompt from elsewhere
-// delivered into a running turn (a background task's notification) isn't the
-// user's message, so it leaves the approval as it was. Never throws; on a
+// typing (terminal or phone) or the SDK host's own turn (`claude -p`, the
+// Agent SDK: the person driving it) can approve, and any other prompt that
+// starts a turn, or a slash command, takes the approval back. A prompt from
+// elsewhere delivered into a running turn (a background task's notification)
+// isn't the user's message, so it leaves the approval as it was. Never throws; on a
 // failure to read, there's no approval.
 export async function notePrompt(
   $: EngineInterface,
@@ -313,10 +360,14 @@ export async function notePrompt(
 ) {
   let yes = false
   if (e !== undefined) {
-    const typed = !e.isMeta && (e.origin.kind === 'composer' || e.origin.kind === 'bridge')
+    const typed = !e.isMeta && ['composer', 'bridge', 'sdk'].includes(e.origin.kind)
     if (!typed && e.turnId !== undefined) return
     const kind = typed && !e.command ? approvalOf(e.text) : undefined
-    yes = kind === 'named' || (kind === 'bare' && (await replyIsAboutCommit($).catch(() => false)))
+    const pick = typed && !e.command && kind === undefined && picksRecommended(e.text)
+    yes =
+      kind === 'named' ||
+      (kind === 'bare' && (await replyIsAboutCommit($).catch(() => false))) ||
+      (pick && (await recommendsCommit($).catch(() => false)))
   }
   await update($, approved, () => yes).catch(() => undefined)
 }
