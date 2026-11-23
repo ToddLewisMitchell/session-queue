@@ -54,10 +54,10 @@ const AUTO = 'Auto-start, Auto-commit, and Clear'
 export const SETTINGS: readonly Setting[] = [
   {
     command: 'queue-parallels',
-    description: 'Choose how many queue sessions run at once: off (one at a time), ask (offer parallel ones), or auto (start every one that can)',
+    description: 'Choose how many queue sessions run at once: off (one at a time; parallel-session <id> starts one), or auto (start every one that can)',
     name: 'Parallels',
     section: 'Parallels',
-    values: { off: '', ask: '', auto: '' },
+    values: { off: '', auto: '' },
   },
   {
     command: 'queue-autostart',

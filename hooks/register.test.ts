@@ -32,7 +32,7 @@ async function footer($: any, modes: string[] = []) {
 }
 
 // The footer's settings: each one's value, missing ones at their defaults.
-const DEFAULTS = { parallels: 'ask', 'auto-start': 'off', 'auto-commit': 'off', 'auto-clear': 'on', 'auto-advance': 'off', notify: 'off' }
+const DEFAULTS = { parallels: 'off', 'auto-start': 'off', 'auto-commit': 'off', 'auto-clear': 'on', 'auto-advance': 'off', notify: 'off' }
 const shown = (o: Partial<typeof DEFAULTS> = {}) =>
   Object.entries({ ...DEFAULTS, ...o })
     .map(([k, v]) => `${k}: ${v}`)
@@ -44,16 +44,22 @@ test('every setting shows, missing ones at their defaults', async ($, on) => {
   expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto' })}`)
 })
 
-test('an older Pace line reads as Parallels; a Parallels line wins over it', async ($, on) => {
-  fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
+test('an older Pace line reads as Parallels; a Parallels line wins over it, and ask reads as off', async ($, on) => {
+  fakeQueues(on, { 'queue-a.md': '**Pace.** speed\n', 'queue-b.md': '**Pace.** speed\n\n**Parallels.** ask\n' })
   await start($)
-  expect(await footer($)).toBe(`queue a · ${shown({ parallels: 'off' })} & queue b · ${shown()}`)
+  expect(await footer($)).toBe(`queue a · ${shown({ parallels: 'auto' })} & queue b · ${shown()}`)
 })
 
-test('a missing Parallels line is ask', async ($, on) => {
+test('a missing Parallels line is off', async ($, on) => {
   fakeQueues(on, { 'queue-demo.md': '# Demo\n\n**Notify.** off\n' })
   await start($)
   expect(await footer($)).toBe(`queue · ${shown()}`)
+})
+
+test('an older Pace economy, or a lone Parallels ask, reads as off', async ($, on) => {
+  fakeQueues(on, { 'queue-a.md': '**Pace.** economy\n', 'queue-b.md': '**Parallels.** ask\n', 'queue-c.md': '**Pace.** speed\n' })
+  await start($)
+  expect(await footer($)).toBe(`queue a · ${shown()} & queue b · ${shown()} & queue c · ${shown({ parallels: 'auto' })}`)
 })
 
 test('a closed queue is ignored; its successor counts', async ($, on) => {
@@ -74,7 +80,7 @@ test('a row that mentions closing a record stays open', async ($, on) => {
   expect(await footer($)).toBe(`queue · ${shown({ parallels: 'auto' })}`)
 })
 
-test('two queues on different Parallels settings are named', async ($, on) => {
+test('two queues on different Parallels settings are named; Pace balanced reads as off', async ($, on) => {
   fakeQueues(on, {
     'queue-a.md': '**Pace.** speed\n',
     'queue-b.md': '**Pace.** balanced\n',

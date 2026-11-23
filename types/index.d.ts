@@ -10,7 +10,7 @@ export type PaneQueue = { name: string; rows: PaneRow[] }
 // One active queue's settings lines, as the footer and the pane show them.
 export type QueueSettings = {
   name: string
-  parallels: 'off' | 'ask' | 'auto'
+  parallels: 'off' | 'auto'
   autoStart: 'on' | 'off'
   autoCommit: 'on' | 'off'
   clear: 'on' | 'off'

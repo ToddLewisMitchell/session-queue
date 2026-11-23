@@ -19,8 +19,7 @@ Where the host has a multiple-choice tool (e.g. `AskUserQuestion`), use it for e
    - whether the queue folder is committed;
    - the **branching mode**, using the comparison in `branching.md` (next to this file). Text written before the dialog may be hidden while it's open, so put each mode's column (how it works, pros, cons, risk) in that option's preview. Without the tool, show the table in the message;
    - **Parallels**: how much runs in parallel (see **Parallels** in `SKILL.md`). Options:
-     - **off:** one session at a time, slowest overall but cheapest. Risk: low.
-     - ★ **ask:** up to two parallel offers, each needing a yes. Risk: low.
+     - ★ **off:** one session at a time, slowest overall but cheapest; the user can still start one with `parallel-session <id>`. Risk: low.
      - **auto:** every eligible row starts at once, fastest but uses up limits soonest, with more merges to approve. Risk: medium.
    - **Auto-start:** ★ **off** (wait for a go-ahead every session; Risk: low), or **on** (start building at once when there's nothing to decide; Risk: low, because any question still stops it).
    - **Auto-commit:** ★ **off** (Risk: low), or **on** (commit and merge without waiting when the Checks and code review pass; Risk: medium, because a bad change can reach main unseen). Pushing always asks.

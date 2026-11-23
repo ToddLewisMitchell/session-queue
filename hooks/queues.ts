@@ -26,7 +26,8 @@ export function settingValue(text: string, name: string): string | undefined {
 // copied `**Auto-commit.** auto` is on). A queue keeps its older line until the
 // setting is changed (`setLine` in commands.ts).
 export const RENAMED: Record<string, { from: string; values: Record<string, string> }> = {
-  Parallels: { from: 'Pace', values: { economy: 'off', balanced: 'ask', speed: 'auto' } },
+  // Parallels `ask` (and Pace `balanced`) is gone: its offers were unreliable.
+  Parallels: { from: 'Pace', values: { economy: 'off', balanced: 'off', speed: 'auto', ask: 'off' } },
   'Auto-start': { from: 'Go-ahead', values: { auto: 'on', ask: 'off' } },
   'Auto-commit': { from: 'Commits', values: { auto: 'on', ask: 'off', approve: 'off' } },
 }
@@ -67,7 +68,7 @@ export function advancePercent(text: string): number | undefined {
   return Math.min(100, Math.max(1, n))
 }
 
-export type Parallels = 'off' | 'ask' | 'auto'
+export type Parallels = 'off' | 'auto'
 export type Queue = {
   name: string
   // The queue folder and the queue file's own text, for the context attached at
@@ -85,7 +86,7 @@ export type Queue = {
   waitsFor: string | undefined
 }
 
-const PARALLELS: readonly string[] = ['off', 'ask', 'auto']
+const PARALLELS: readonly string[] = ['off', 'auto']
 
 // The queue folder sits at the main checkout's root. A relative path follows
 // the shell's `cd`, so after `cd src` `queues` isn't there (or is some other
@@ -152,7 +153,7 @@ export function parseQueue(name: string, dir: string, text: string): Queue {
     name,
     dir,
     text,
-    parallels: set !== undefined && PARALLELS.includes(set) ? (set as Parallels) : 'ask',
+    parallels: set !== undefined && PARALLELS.includes(set) ? (set as Parallels) : 'off',
     autoStart: readSetting(text, 'Auto-start') === 'on',
     autoCommit: readSetting(text, 'Auto-commit') === 'on',
     clear: clearOn(settingValue(text, 'Clear')),

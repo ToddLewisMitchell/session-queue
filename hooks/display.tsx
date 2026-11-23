@@ -6,7 +6,7 @@ import { isAutoCommit, settingsNow, summary } from './settings-state'
 // The settings shown beside the chat, from the values `refresh` (status.ts)
 // keeps in `$.state`:
 // - In the prompt footer's mode labels (`SessionMode`, terminal and desktop):
-//   every setting of each active queue, `queue · parallels: ask · auto-start:
+//   every setting of each active queue, `queue · parallels: off · auto-start:
 //   on · …`, so the user always knows how much runs without asking them
 //   (a separator after `queue`, so each setting keeps its own colon).
 // - On the phone, where the footer isn't drawn, the same at the end of the

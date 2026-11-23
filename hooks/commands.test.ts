@@ -165,7 +165,7 @@ test('nextRow skips rows after an open row, and last while others are open', () 
 test('an inherited key is not a value', async ($, on) => {
   const files: Record<string, string> = { 'queue-demo.md': QUEUE }
   fakeFolder(on, files)
-  expect((await run($, 'queue-parallels', 'constructor')).text).toBe('Usage: /queue-parallels <off|ask|auto> [queue]')
+  expect((await run($, 'queue-parallels', 'constructor')).text).toBe('Usage: /queue-parallels <off|auto> [queue]')
   expect(files['queue-demo.md']).toBe(QUEUE)
 })
 

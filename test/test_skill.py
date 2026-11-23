@@ -8,14 +8,14 @@ checkout's plugin loaded, and checks what the skill left behind:
 - hard checks (✓/✗) on files, the queue table, and git state;
 - judged checks (marked "judge") on the wording of Claude's reply, graded
   by a small model, for things only the reply can show (it asked, it
-  offered at most two parallel sessions, ...);
+  made no parallel offer under Parallels off, ...);
 - warnings (⚠) for tool calls the harness's allowlist refused.
 
 Two fixtures:
 - simple: three plain rows (subtract, multiply after 1, an unplaced Rust rewrite);
 - rich:   ten rows in every state: DONE with and without a hash, DROPPED,
           PAUSED with a WIP branch, a row with a task folded in, four
-          independent rows for parallel offers, and an unplaced row.
+          independent rows that could run in parallel, and an unplaced row.
 
 Multi-turn scenarios continue the same conversation with --resume, to
 cover what happens after the user answers (approve, decide, stop, ...).
@@ -780,13 +780,10 @@ def _(c, ctx):
 
 # ---- rich fixture ----------------------------------------------------------
 
-PARALLEL_Q = ("Does the reply plainly offer ONE OR TWO sessions to run in parallel (not saying it is "
-              "'not offering' any), each with a risk line, "
-              "chosen only from sessions {ok}, and NOT offer session(s) {bad} for parallel running? "
-              "(Mentioning a session only to say it isn't eligible is fine.)")
 NO_PARALLEL_Q = ("Does the reply AVOID offering, suggesting, or asking about running any session in "
                  "parallel (a worktree, a background session, or side by side)? (Not mentioning parallel "
-                 "sessions at all counts as yes.)")
+                 "sessions at all counts as yes, and so does saying this session can run beside one "
+                 "that's already running.)")
 
 
 @scenario("rich-show", "Show a busy queue: paused reason, next row, open rows only", "rich",
@@ -815,8 +812,7 @@ def _(c, ctx):
     c.check(unittest_run(root)[0], "Checks pass")
     c.check(all(status(root, r) == ctx_status(ctx, r) for r in ("4", "5", "6", "7", "7b")),
             "no other row claimed")
-    judge(c, ctx.outs[0], PARALLEL_Q.format(ok="5, 6, 7, 7b", bad="4 and 8"),
-          "≤ 2 parallel offers, eligible rows only")
+    judge(c, ctx.outs[0], NO_PARALLEL_Q, "no parallel offer under Parallels off (the default)")
 
 
 def ctx_status(ctx, rid):
@@ -858,6 +854,14 @@ def setup_skip_wt(root, fx):
     git(root, "worktree", "add", "-q", ".claude/worktrees/3-divide", "q/3-divide")
 
 
+# skip's reply has to explain that row 5 runs while row 3 works in its own
+# worktree, which a general no-parallel question can misread as an offer.
+SKIP_NO_PARALLEL_Q = ("Does the reply AVOID offering, suggesting, or asking about running any of sessions "
+                      "6, 7, or 7b (or a split of session 5) in parallel, beside session 5? (Saying session 5 "
+                      "runs in the main checkout while session 3 works in its own worktree is NOT an offer "
+                      "and counts as yes.)")
+
+
 @scenario("skip", "Skip a claimed row (in its worktree) and a row ordered after it; run row 5", "rich",
           ["next-session", GO], setup=setup_skip_wt)
 def _(c, ctx):
@@ -871,8 +875,7 @@ def _(c, ctx):
     c.check(unittest_run(root)[0], "Checks pass")
     c.check(not git(root, "status", "--porcelain", "calc.py") and
             refs(root)["main"] == ctx.start["refs"]["main"], "calc.py untouched")
-    judge(c, ctx.outs[0], PARALLEL_Q.format(ok="6, 7, 7b", bad="3, 4, and 8"),
-          "≤ 2 parallel offers, eligible rows only")
+    judge(c, ctx.outs[0], SKIP_NO_PARALLEL_Q, "no parallel offer under Parallels off (the default)")
 
 
 # ---- rich fixture: a second next-session beside one in the main checkout ----
