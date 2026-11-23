@@ -850,8 +850,16 @@ def setup_skip(root, fx):
          "IN PROGRESS 2026-11-12 (building; calc-3)")
 
 
-@scenario("skip", "Skip a claimed row and a row ordered after it; run row 5", "rich",
-          ["next-session", GO], setup=setup_skip)
+def setup_skip_wt(root, fx):
+    """Row 3 claimed, running in its own worktree: it doesn't hold the main checkout."""
+    setup_skip(root, fx)
+    (root / ".claude/worktrees").mkdir(parents=True)
+    (root / ".claude/worktrees/.gitignore").write_text("*\n")
+    git(root, "worktree", "add", "-q", ".claude/worktrees/3-divide", "q/3-divide")
+
+
+@scenario("skip", "Skip a claimed row (in its worktree) and a row ordered after it; run row 5", "rich",
+          ["next-session", GO], setup=setup_skip_wt)
 def _(c, ctx):
     root = ctx.root
     waited(c, ctx, "strings.py", "slugify", rid="5")
@@ -883,6 +891,8 @@ def setup_busy5(root, fx):
 
 def setup_busy5_wt3(root, fx):
     setup_busy5(root, fx)
+    (root / WT_DIR).mkdir(parents=True)
+    (root / WT_DIR / ".gitignore").write_text("*\n")
     git(root, "worktree", "add", "-q", WT_DIR + "3-divide", "q/3-divide")
     edit(root, "queues/queue-demo.md", "WIP commit on q/3-divide)",
          "WIP commit on q/3-divide, in worktree .claude/worktrees/3-divide)")
@@ -890,7 +900,7 @@ def setup_busy5_wt3(root, fx):
          "Resume on `q/3-divide`, in its worktree `.claude/worktrees/3-divide`.")
 
 
-def parallel_divide(c, ctx):
+def parallel_divide(c, ctx, existing=False):
     """Row 3 resumed on its existing branch, in a worktree; the main checkout untouched."""
     root, fx = ctx.root, ctx.fx
     s1 = ctx.snaps[0]
@@ -917,6 +927,12 @@ def parallel_divide(c, ctx):
     c.check(st.startswith("IN PROGRESS") and "waiting for approval" in st,
             f"row 3 in the main checkout's queue: waiting for approval ({st})")
     c.check(status(root, "5") == "IN PROGRESS 2026-11-12 (building; calc-5)", "row 5's claim untouched")
+    if existing:  # its work already lives in a worktree: no parallel-or-not question to ask
+        judge(c, ctx.outs[0], "Does the reply say session 5 is claimed by another session (in progress; "
+              "adding that the claim may be stale is fine), say that session 3 (divide) would run in "
+              "its existing worktree (not in the main checkout), and wait for the user's go-ahead "
+              "before building?", "names the running session; resumes in the existing worktree")
+        return
     judge(c, ctx.outs[0], "Does the reply say session 5 is claimed by another session (in progress; "
           "adding that the claim may be stale is fine), and ask whether to run "
           "session 3 (divide) as a parallel session "
@@ -925,15 +941,15 @@ def parallel_divide(c, ctx):
 
 
 @scenario("parallel-resume", "Main checkout busy: resume PAUSED row 3 in a new worktree on q/3-divide",
-          "rich", ["next-session", PARALLEL_YES], setup=setup_busy5, allow=["EnterWorktree"])
+          "rich", ["next-session", PARALLEL_YES], setup=setup_busy5, allow=["EnterWorktree", "ExitWorktree"])
 def _(c, ctx):
     parallel_divide(c, ctx)
 
 
 @scenario("parallel-reuse", "Main checkout busy: resume PAUSED row 3 in its existing worktree",
-          "rich", ["next-session", PARALLEL_YES], setup=setup_busy5_wt3, allow=["EnterWorktree"])
+          "rich", ["next-session", PARALLEL_YES], setup=setup_busy5_wt3, allow=["EnterWorktree", "ExitWorktree"])
 def _(c, ctx):
-    parallel_divide(c, ctx)
+    parallel_divide(c, ctx, existing=True)
     judge(c, ctx.outs[0], "Does the reply treat session 3 as PAUSED work to resume (in its existing "
           "worktree), not as a session already running elsewhere that it must leave alone?",
           "a PAUSED row's worktree isn't a running session")
@@ -941,7 +957,7 @@ def _(c, ctx):
 
 @scenario("parallel-new", "Main checkout busy: run TODO row 5 in a new worktree on q/5-*, off main",
           "rich", ["next-session", PARALLEL_YES], setup=setup_skip, branches=True,
-          allow=["EnterWorktree"])
+          allow=["EnterWorktree", "ExitWorktree"])
 def _(c, ctx):
     root = ctx.root
     s1 = ctx.snaps[0]
@@ -1272,12 +1288,13 @@ ALLOWED = ["Read", "Glob", "Grep", "Skill",
            "Edit(queues/**)", "Write(queues/**)", "Edit(./**)", "Write(./**)",
            "Bash(python3 *)", "Bash(git *)", "Bash(sed *)", "Agent",
            "Bash(cd *)", "Bash(ls*)", "Bash(cat*)", "Bash(head*)", "Bash(tail*)", "Bash(wc*)",
-           "Bash(grep*)", "Bash(find*)", "Bash(date*)", "ListAgents"]
+           "Bash(grep*)", "Bash(find*)", "Bash(date*)", "Bash(mkdir*)", "Bash(printf*)",
+           "ListAgents"]
 # All of git (but push) is allowed on purpose: a commit made without approval
 # must show up as a failed check, not a denied call. Agent is allowed for
 # /code-review's subagents; every "Go." declines parallel sessions.
 DISALLOWED = ["Bash(git push*)", "AskUserQuestion", "PushNotification",
-              "EnterWorktree", "SendMessage"]
+              "EnterWorktree", "ExitWorktree", "SendMessage"]
 
 
 def claude_turn(root, prompt, plugin_dir, sid, first, allow=()):
