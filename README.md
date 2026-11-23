@@ -1,6 +1,6 @@
 # session-queue
 
-**Save tokens and stay organized while working on a project with Claude Code!**
+**Save tokens and stay organized while working on a project with Claude Code.**
 
 ## Install
 ```
