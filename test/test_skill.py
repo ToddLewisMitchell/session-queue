@@ -783,7 +783,9 @@ def _(c, ctx):
 NO_PARALLEL_Q = ("Does the reply AVOID offering, suggesting, or asking about running any session in "
                  "parallel (a worktree, a background session, or side by side)? (Not mentioning parallel "
                  "sessions at all counts as yes, and so does saying this session can run beside one "
-                 "that's already running.)")
+                 "that's already running. Explaining a row's placement or ordering, such as why one row goes last or "
+                 "after another, is not an offer to run anything in parallel; suggesting that rows could run "
+                 "concurrently or side by side still is.)")
 
 
 @scenario("rich-show", "Show a busy queue: paused reason, next row, open rows only", "rich",
