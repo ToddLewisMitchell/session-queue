@@ -286,7 +286,16 @@ test('decide: each stop', () => {
     'Auto-start, Auto-commit, and Clear must be on',
   )
   expect(stopOf(decide(q(FINISHED), [], [], opus))).toBe('no weekly usage reading')
-  expect(stopOf(decide(q(FINISHED), [], [...WEEKLY(10), { kind: 'five_hour', percentUsed: 92 }], opus))).toBe('five-hour usage is at 92%')
+  const FIVE = (percentUsed: number, resetsAt?: string) => [...WEEKLY(10), { kind: 'five_hour', percentUsed, ...(resetsAt ? { resetsAt } : {}) }]
+  const now = Date.parse('2026-11-23T12:00:00Z')
+  const at = (iso: string) => decide(q(FINISHED), [], FIVE(99, iso), opus, now)
+  expect(stopOf(decide(q(FINISHED), [], FIVE(50), opus, now))).toBe('advance 2')
+  expect(stopOf(decide(q(FINISHED), [], FIVE(95), opus, now))).toBe('advance 2') // below 98%: starts now
+  expect(stopOf(decide(q(FINISHED), [], FIVE(99), opus, now))).toBe('five-hour usage is at 99% and its reset time is unknown')
+  const waiting = at('2026-11-23T14:00:00Z')
+  expect(waiting && 'advance' in waiting ? waiting.resetAt : undefined).toBe(Date.parse('2026-11-23T14:00:00Z')) // waits for the reset
+  const stale = at('2026-11-23T11:00:00Z')
+  expect(stale && 'advance' in stale ? stale.resetAt : 'x').toBe(undefined) // reset has passed: the reading is stale
   expect(stopOf(decide(q(FINISHED), [], WEEKLY(10), 'claude-sonnet-5-5'))).toBe('2 (Second) runs on opus; switch with /model')
   expect(stopOf(decide(q(FINISHED.replace('| 2 | Second.', '| 2 | Second. **Starts with its discussion**.')), [], WEEKLY(10), opus))).toBe(
     '2 (Second) starts with its discussion',

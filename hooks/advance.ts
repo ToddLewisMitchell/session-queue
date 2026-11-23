@@ -19,10 +19,13 @@ import { activeQueues, nextRowOf, openQueues, rows, type Queue, type Row } from 
 //   clear this one unless it is running a queue session too);
 // - the next row isn't PAUSED (resuming asks about its blocker), doesn't start
 //   with its discussion, and runs on the current model;
-// - the weekly window (`seven_day`) is under the queue's percentage, and the
-//   five-hour window under 90%, so a session doesn't start only to hit a
-//   limit halfway. With no weekly reading (API-key billing, or no reply yet),
-//   it stops rather than guess.
+// - the weekly window (`seven_day`) is under the queue's percentage. The
+//   five-hour window (`five_hour`) at 98% or more doesn't stop it: it waits
+//   for the window's `resetsAt`, then goes on, so a session doesn't start only
+//   to hit the limit halfway. A reading whose reset time has passed is stale
+//   (it updates only with the next reply) and is ignored. With no weekly
+//   reading (API-key billing, or no reply yet), or a full five-hour window
+//   with no reset time, it stops rather than guess.
 //
 // When the countdown ends while a background agent of this conversation is
 // still at work, or the turn reading an agent's report is running, it waits
@@ -30,7 +33,6 @@ import { activeQueues, nextRowOf, openQueues, rows, type Queue, type Row } from 
 // POLL_MS, for up to WAIT_MAX_MS, and still cancels when the user types or
 // sends a prompt (a background task's notification isn't one).
 
-const FIVE_HOUR_MAX = 90
 export const DELAY_MS = 15_000
 export const POLL_MS = 15_000
 export const WAIT_MAX_MS = 30 * 60_000
@@ -59,15 +61,19 @@ export function noteNotificationTurn(open: boolean) {
   return was
 }
 
+const FIVE_HOUR_MAX = 98
+const RESET_POLL_MAX_MS = 10 * 60_000
+
 const DONE = /^DONE\b/i
 export const doneIds = (text: string) => rows(text).filter(r => DONE.test(r.status)).map(r => r.id)
 
-export type Decision = { advance: Row } | { stop: string } | undefined
+// `resetAt`: the five-hour window is nearly full; go on only after this time (ms).
+export type Decision = { advance: Row; resetAt?: number } | { stop: string } | undefined
 
 // Whether queue `q`, with the DONE rows `before` it had when this
 // conversation's `next-session` was sent, goes on to its next row now. Undefined: nothing to do or say (no
 // row finished, or auto-advance is off).
-export function decide(q: Queue, before: readonly string[] | undefined, limits: readonly SessionRateLimit[], model: string): Decision {
+export function decide(q: Queue, before: readonly string[] | undefined, limits: readonly SessionRateLimit[], model: string, now = Date.now()): Decision {
   const percent = q.autoAdvance
   if (percent === undefined || before === undefined) return undefined
   if (!doneIds(q.text).some(id => !before.includes(id))) return undefined
@@ -86,8 +92,17 @@ export function decide(q: Queue, before: readonly string[] | undefined, limits: 
   if (!weekly) return { stop: 'no weekly usage reading' }
   if (weekly.percentUsed >= percent) return { stop: `weekly usage is at ${weekly.percentUsed}% (limit set: ${percent}%)` }
   const fiveHour = limits.find(l => l.kind === 'five_hour')
-  if (fiveHour && fiveHour.percentUsed >= FIVE_HOUR_MAX) return { stop: `five-hour usage is at ${fiveHour.percentUsed}%` }
+  if (fiveHour && fiveHour.percentUsed >= FIVE_HOUR_MAX) {
+    const resetAt = fiveHour.resetsAt ? Date.parse(fiveHour.resetsAt) : NaN
+    if (Number.isNaN(resetAt)) return { stop: `five-hour usage is at ${fiveHour.percentUsed}% and its reset time is unknown` }
+    if (resetAt > now) return { advance: next, resetAt }
+  }
   return { advance: next }
+}
+
+// A time of day for a toast.
+function clockTime(ms: number) {
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 // A session's name for a toast: up to its first `.`, `+`, or 40 characters.
@@ -136,11 +151,11 @@ export async function afterTurn($: EngineInterface, submit: (text: string) => Pr
   if (on.length === 0) return
   const [usage, model] = await Promise.all([$.session.usage().catch(() => undefined), $.session.model().catch(() => '')])
   const stops: string[] = []
-  let go: { q: Queue; row: Row } | undefined
+  let go: { q: Queue; row: Row; d: Decision } | undefined
   for (const q of on) {
-    const d = decide(q, before[q.name], usage?.rateLimits ?? [], model)
+    const d = decide(q, before[q.name], usage?.rateLimits ?? [], model, await $.clock.now())
     if (d && 'advance' in d) {
-      go = { q, row: d.advance }
+      go = { q, row: d.advance, d }
       break
     }
     if (d) stops.push(on.length > 1 ? `${q.name}: ${d.stop}` : d.stop)
@@ -153,7 +168,12 @@ export async function afterTurn($: EngineInterface, submit: (text: string) => Pr
   const text = active.length > 1 ? `next-session ${q.name}` : 'next-session'
   const mine = { gen: ++gen, text, queue: q.name, row: row.id, before: before[q.name] ?? [] }
   pending = mine
-  $.ui.toast(`session-queue: auto-advance runs ${row.id} (${short(row.session)}) in ${DELAY_MS / 1000}s; type in the prompt box to cancel.`)
+  const resetAt = 'advance' in go.d ? go.d.resetAt : undefined
+  $.ui.toast(
+    resetAt === undefined
+      ? `session-queue: auto-advance runs ${row.id} (${short(row.session)}) in ${DELAY_MS / 1000}s; type in the prompt box to cancel.`
+      : `session-queue: five-hour usage is high; auto-advance waits until it resets at ${clockTime(resetAt)}, then runs ${row.id} (${short(row.session)}); type in the prompt box to cancel.`,
+  )
   $.clock.after(DELAY_MS, () => void fire($, mine, submit))
 }
 
@@ -181,9 +201,18 @@ async function fire($: EngineInterface, mine: NonNullable<typeof pending>, submi
     if (box.text.trim() !== '') return stop('session-queue: auto-advance cancelled (the prompt box has text).')
     const q = (await openQueues($)).find(o => o.name === mine.queue)
     const [usage, model] = await Promise.all([$.session.usage().catch(() => undefined), $.session.model().catch(() => '')])
-    const d = q ? decide(q, mine.before, usage?.rateLimits ?? [], model) : undefined
+    const d = q ? decide(q, mine.before, usage?.rateLimits ?? [], model, await $.clock.now()) : undefined
     if (!d || !('advance' in d) || d.advance.id !== mine.row)
       return stop(`session-queue: auto-advance cancelled (${d && 'stop' in d ? d.stop : 'the queue changed'}).`)
+    // The five-hour window is nearly full: look again later, with no cap (it
+    // is the user's wait), until its reset time has passed.
+    if (d.resetAt !== undefined) {
+      const left = d.resetAt - (await $.clock.now())
+      if (left > 0) {
+        $.clock.after(Math.max(POLL_MS, Math.min(left + 5_000, RESET_POLL_MAX_MS)), () => void fire($, mine, submit))
+        return
+      }
+    }
     const busy = await busyAgents($)
     // Cancelled while reading (the user typed): nothing more to do.
     if (pending?.gen !== mine.gen) return
