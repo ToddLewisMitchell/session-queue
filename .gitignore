@@ -4,3 +4,4 @@ __pycache__/
 
 # Editor scaffold the plugin-authoring engine writes (extends the self-ignored .claude-plugin/types/)
 /tsconfig.json
+deploy.md
