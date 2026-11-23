@@ -20,9 +20,15 @@ The settings in the prompt footer, the automatic `/clear` before `next-session`,
 | "Add to the queue: <task>" or "Enqueue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row, or adds it to that session's topic file |
 | `next-session` | Runs the next placed TODO session of the active queue (`next-session <name>` only if you keep two running side by side) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
-| "Set the queue's parallels to auto" | Switches between off and auto (see below) |
-| "Turn on auto-start" / "Turn on auto-commit" | Skips the wait when there's nothing to decide / commits without asking when the checks and review pass (see below) |
-| "Where's the queue?" | Shows each open row, what runs next, and any paused or stale sessions, without changing anything |
+| `/queue` (or "Where's the queue?") | Shows each open row, what runs next, and the settings, with no model turn. Asking in words also lists paused or stale sessions |
+| `/queue-autoadvance <n>%` (or `off`) | Starts each next session by itself until <n>% of your weekly usage limit is used (80% if you give no number; see below) |
+| `/queue-autoclear on` (or `off`) | Clears the conversation before `next-session` (see below) |
+| `/queue-autocommit on` (or `off`) | Commits without asking when the checks and review pass (see below) |
+| `/queue-autostart on` (or `off`) | Skips the wait when there's nothing to decide (see below) |
+| `/queue-notify on` (or `off`) | Sends a notification (to your phone, with Remote Control connected) when a session stops for your decision or approval (see below) |
+| `/queue-pane` | Opens the same list in a pane beside the chat that updates after every turn |
+| `/queue-parallels auto` (or `off`) | Switches between off and auto (see below). Plain words ("Set the queue's parallels to auto") work where the hooks module isn't running |
+| `/queue-remove <id>` | Deletes a row and its topic file (see below). To keep a record instead, use "Drop" below |
 | "Drop <task> from the queue" | Marks it dropped and keeps it on record |
 | "Close the queue" | Closes it as a record and starts a successor with the open rows |
 | "Start a queue to run after this one" / "Move <task> to it" | Writes a second queue with the same settings, asking only its goal and name; it waits until the first one closes, so `next-session` keeps running the first without asking which |
@@ -59,7 +65,7 @@ A Claude Code plugin for running a long project as a **queue of sessions**, kept
 - **A fresh context for every session.** Typing `next-session` in a conversation that's already been used clears it first (`/clear`), then runs `next-session` in the empty one. It won't clear while a background session is still running there. Turn it off per queue with the Clear setting.
 - **A quicker start.** `next-session` arrives with the queue file and the next session's topic file already attached, so Claude doesn't spend tool calls reading them.
 - **Settings and status without a model turn.** `/queue` shows the open sessions, what `next-session` runs next, and the settings. `/queue-parallels`, `/queue-autostart`, `/queue-autocommit`, `/queue-autoclear`, `/queue-autoadvance`, and `/queue-notify` change one setting in the queue file (for example `/queue-parallels auto`; add the queue's name when two are active). `/queue-remove <id>` deletes a row from the session table and its topic file (kept if another row names it; a running row is refused). `/queue-pane` opens the same list in a pane beside the chat that updates after every turn, with the running session marked ● and the next one ▶ (the settings stay under the prompt). `next-session` works in any case (`Next-session` too).
-- **Optional notifications.** Turn them on when the queue starts, and Claude sends a push when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
+- **Optional notifications.** Turn them on when the queue starts, and Claude sends a notification when a session stops for your decision or approval. With Remote Control connected, it reaches your phone. `/queue-notify on` or `off` changes it later. Off by default, and never for routine progress. A session that dies from a usage limit or crash can't send one, so silence doesn't mean it's still working.
 
 ## How it keeps token use down
 Every token in a conversation's context is paid for again on every turn. A long project run as one long conversation gets more expensive with each step, and gets summarized and loses detail. This method keeps each session's context small and focused.
