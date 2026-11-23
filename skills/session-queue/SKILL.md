@@ -1,6 +1,6 @@
 ---
 name: session-queue
-description: Run a project as a Markdown queue of sessions (queue file + topic files, a go-ahead before building, discussion first, risk lines, approval before commits, optional auto-start and auto-commit, a Parallels setting for parallel worktrees, and optional notifications). Use for `next-session`, `parallel-session <id>`, or starting, showing, adding to, reordering, dropping from, pausing, changing the settings of, or closing a queue (`queues/queue-*.md`).
+description: Run a project as a Markdown queue of sessions (queue file + topic files, a go-ahead before building, discussion first, risk lines, approval before commits, optional auto-start and auto-commit, a Parallels setting for parallel worktrees, and optional notifications). Use for `next-session`, `parallel-session <id>`, or starting, showing, adding to (`Add to the queue:` or `Enqueue:`), reordering, dropping from, pausing, changing the settings of, or closing a queue (`queues/queue-*.md`).
 ---
 
 # Session queue
@@ -89,6 +89,7 @@ When a conversation changes something a running session needs (a task folded in;
 **Read `references/start-queue.md` before asking the user anything.** It covers an existing open queue, the goal and name, git, branching, Parallels, Notify, Checks, Worktree setup, and roll-overs from workflow 5.
 
 ### 2. Add a task
+"Add to the queue: <task>" and "Enqueue: <task>" mean the same.
 1. **Pick the queue:** the one the user named, else the active queue; with two active queues, ask.
    - **Place it yourself.** Never ask where it goes, or to confirm your choice. The user's placement wins; otherwise pick the best from the topic files and the code: its own row, ordered by dependencies and shared files, or folded into another session (step 4) when that's clearly better (e.g. a small task in the same files). Tell the user in one line where it went and why, with a risk line if the risk isn't low.
    - **Several tasks at once:** place each one separately, by the rule above. New tasks that belong together can share a session: give the first its own row and fold the others into it. Tell the user where each went, one line per task.

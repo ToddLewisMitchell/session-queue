@@ -1,6 +1,6 @@
 {
   "name": "session-queue",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "A queue of fresh sessions for long projects: a short queue file and a topic file per session, `next-session`, discussion first, approval before every commit, memory handoffs, a Parallels setting for parallel worktrees (off or auto, shown under the prompt), and optional push notifications.",
   "icon": "./.claude-plugin/icon.png",
   "author": {

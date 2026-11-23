@@ -17,7 +17,7 @@ The settings in the prompt footer, the automatic `/clear` before `next-session`,
 | You type | Claude does |
 |---|---|
 | "Start a queue for <goal>" | Checks for an open queue first, suggests goals from the repo, asks about git, branching, parallel sessions, and notifications, then about auto-start, auto-commit, and clear, then writes the queue file |
-| "Add to the queue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row, or adds it to that session's topic file |
+| "Add to the queue: <task>" or "Enqueue: <task>" | Places it where it fits best (or folds it into a related session) without asking, and tells you where and why (a list is placed task by task); writes a topic file and a row, or adds it to that session's topic file |
 | `next-session` | Runs the next placed TODO session of the active queue (`next-session <name>` only if you keep two running side by side) |
 | `parallel-session <id>` | Runs that session in a git worktree alongside the current one |
 | "Set the queue's parallels to auto" | Switches between off and auto (see below) |
