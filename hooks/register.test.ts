@@ -238,11 +238,12 @@ test('a Clear word other than on or auto keeps the conversation', async ($, on) 
   expect(calls).toEqual(['next-session'])
 })
 
-test('a running background agent blocks the clear', async ($, on) => {
+test("a running background agent blocks the clear, and next-session doesn't run on top of the last session", async ($, on) => {
   const { clock, calls } = fakeSession(on, QUEUE_ON, { agents: ['completed', 'running'] })
-  await typed($, 'next-session')
+  const r = await typed($, 'next-session')
   await clock.settle()
-  expect(calls).toEqual(['next-session'])
+  expect(calls).toEqual([])
+  expect(r.drop).toContain("Clear is on, but a background agent is still running, so the conversation can't be cleared yet")
 })
 
 test('other prompts and origins pass through', async ($, on) => {

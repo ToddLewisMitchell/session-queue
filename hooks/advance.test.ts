@@ -11,6 +11,8 @@ function fake(on: any, files: Record<string, string>, opts: { weekly?: number; f
   const calls: string[] = []
   let box = ''
   let messages = 0
+  // Undefined: the list can't be read.
+  let agents: string[] | undefined = []
   const clock = mock.clock(on)
   on('fs.list', () => ({
     value: Object.keys(files).map(name => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })),
@@ -23,7 +25,10 @@ function fake(on: any, files: Record<string, string>, opts: { weekly?: number; f
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('turn.complete', () => ({ text: '' }))
   on('session.messages', () => ({ value: Array.from({ length: messages }, () => ({ role: 'user', text: 'x', toolUses: [] })) }))
-  on('agent.list', () => ({ value: [] }))
+  on('agent.list', () => {
+    if (agents === undefined) throw new Error('no list')
+    return { value: agents.map((status, i) => ({ id: `a${i}`, description: 'd', type: 'fork', status, provider: { plugin: 'engine', tier: 'core' } })) }
+  })
   on('session.model', () => ({ value: opts.model ?? 'claude-opus-5-5' }))
   on('session.usage', () => ({
     value: {
@@ -40,7 +45,7 @@ function fake(on: any, files: Record<string, string>, opts: { weekly?: number; f
   on('prompt.fill', (_: unknown, e: { text: string }) => ((box = e.text), { isFilled: true }))
   on('command.run', (_: unknown, e: { command: string }) => (calls.push(`/${e.command}`), { text: '' }))
   on('prompt.submit', (_: unknown, e: { text: string }) => (calls.push(e.text), { text: e.text }))
-  return { toasts, calls, clock, setBox: (t: string) => (box = t), used: () => (messages = 3) }
+  return { toasts, calls, clock, setBox: (t: string) => (box = t), used: () => (messages = 3), setAgents: (a: string[] | undefined) => (agents = a) }
 }
 
 const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -80,6 +85,110 @@ test('a row going DONE advances after the delay, through the clear', async ($, o
   await clock.advance(14_000)
   expect(calls).toEqual([])
   await clock.advance(1_000)
+  await clock.settle()
+  expect(calls).toEqual(['/clear', 'next-session'])
+})
+
+test('a background agent still at work: it waits, then advances once the agent is done', async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used, setAgents } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  setAgents(['completed', 'waiting'])
+  await turn($)
+  await clock.advance(15_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toBe('session-queue: auto-advance waits for a background agent to finish, then runs 2; type in the prompt box to cancel.')
+  await clock.advance(60_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  setAgents(['completed', 'completed'])
+  await clock.advance(15_000)
+  await clock.settle()
+  expect(calls).toEqual(['/clear', 'next-session'])
+})
+
+test('typing while it waits for an agent cancels it', async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used, setAgents } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  setAgents(['running'])
+  await turn($)
+  await clock.advance(15_000)
+  await clock.settle()
+  await ($ as any).prompt.edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: 'h' })
+  setAgents([])
+  await clock.advance(30_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toBe('session-queue: auto-advance cancelled (you typed in the prompt box).')
+})
+
+test('an agent still at work after 30 minutes stops it', async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used, setAgents } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  setAgents(['running'])
+  await turn($)
+  for (let i = 0; i < 125; i++) await clock.advance(15_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toBe('session-queue: auto-advance stopped: still waiting for a background agent after 30 minutes.')
+  setAgents([])
+  await clock.advance(60_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+})
+
+test("the agent's report arriving doesn't cancel it: it waits for that turn, then advances", async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  await turn($)
+  await ($ as any).prompt.submit({ text: 'agent done', wait: false, origin: { kind: 'task-notification' } })
+  calls.length = 0
+  await clock.advance(30_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toContain('auto-advance waits for the agent’s report to finish')
+  await turn($)
+  await clock.advance(15_000)
+  await clock.settle()
+  expect(calls).toEqual(['/clear', 'next-session'])
+})
+
+test("the agent's report turn ending without an answer cancels it", async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  await turn($)
+  await ($ as any).prompt.submit({ text: 'agent done', wait: false, origin: { kind: 'task-notification' } })
+  calls.length = 0
+  await turn($, 'aborted')
+  await clock.advance(60_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toBe('session-queue: auto-advance cancelled (the agent’s report turn didn’t finish).')
+})
+
+test('an agent list that cannot be read is waited out, not taken as idle', async ($, on) => {
+  const files = { 'queue-demo.md': RUNNING }
+  const { toasts, calls, clock, used, setAgents } = fake(on, files, { weekly: 40 })
+  await runSession($, used, calls)
+  files['queue-demo.md'] = FINISHED
+  setAgents(undefined)
+  await turn($)
+  await clock.advance(15_000)
+  await clock.settle()
+  expect(calls).toEqual([])
+  expect(toasts.at(-1)).toContain('their list can’t be read')
+  setAgents([])
+  await clock.advance(15_000)
   await clock.settle()
   expect(calls).toEqual(['/clear', 'next-session'])
 })

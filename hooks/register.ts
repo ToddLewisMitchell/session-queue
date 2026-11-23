@@ -1,5 +1,5 @@
 import type { EngineInterface, Register } from 'claude-code'
-import { afterTurn, cancelAdvance, noteNextSession } from './advance'
+import { afterTurn, busyAgents, cancelAdvance, noteNextSession, noteNotificationTurn } from './advance'
 import { commands, registerCommands } from './commands'
 import { queueContext } from './context'
 import { display } from './display'
@@ -36,18 +36,18 @@ import { refresh } from './status'
 // `next-session`, optionally followed by a queue name, and nothing else, in
 // any case (`Next-session` too).
 const NEXT = /^\s*next-session(?:\s+([\w.-]+))?\s*$/i
-// Agents whose report would be lost if the conversation were cleared.
-const BUSY = new Set(['pending', 'running', 'waiting'])
 
-// Whether to clear before this `next-session`: the queue it names (or, unnamed,
-// every active queue) has Clear on, the conversation has messages, and no
-// background agent of this conversation is still at work.
-async function shouldClear($: EngineInterface, named: string | undefined) {
+// Whether to clear before this `next-session`: `clear` when the queue it names
+// (or, unnamed, every active queue) has Clear on, the conversation has
+// messages, and no background agent of this conversation is still at work;
+// `blocked` when only that last part fails (or the agents can't be read): the
+// clear the queue asks for can't run yet; `no` when there's nothing to clear.
+async function clearState($: EngineInterface, named: string | undefined): Promise<'clear' | 'blocked' | 'no'> {
   const picked = pickQueues(await openQueues($), named)
-  if (picked.length === 0 || !picked.every(q => q.clear)) return false
+  if (picked.length === 0 || !picked.every(q => q.clear)) return 'no'
   const last = await $.session.messages({ last: 1 })
-  if ('deny' in last || last.length === 0) return false
-  return !(await $.agent.list()).some(a => BUSY.has(a.status))
+  if ('deny' in last || last.length === 0) return 'no'
+  return (await busyAgents($)) === 0 ? 'clear' : 'blocked'
 }
 
 // The engine hands a dropped prompt back to the box as a draft; once the
@@ -109,12 +109,17 @@ async function clearThenRun($: EngineInterface, text: string, named: string | un
 }
 
 // Auto-advance's `next-session` (advance.ts), always in a fresh conversation:
-// where the clear would be skipped (a background agent still at work), it
-// stops instead of running the next session on top of this one.
+// where the clear can't run, it stops instead of running the next session on
+// top of this one.
 async function advance($: EngineInterface, text: string) {
   const named = NEXT.exec(text)?.[1]
-  if (await shouldClear($, named).catch(() => false)) return clearThenRun($, text, named, false)
-  $.ui.toast('session-queue: auto-advance stopped: the conversation can’t be cleared (Clear is off, or a background agent is still running).')
+  const state = await clearState($, named).catch(() => 'no' as const)
+  if (state === 'clear') return clearThenRun($, text, named, false)
+  $.ui.toast(
+    state === 'blocked'
+      ? 'session-queue: auto-advance stopped: a background agent is still running, so the conversation can’t be cleared.'
+      : 'session-queue: auto-advance stopped: the conversation can’t be cleared (Clear is off).',
+  )
 }
 
 export const register: Register = on => {
@@ -156,6 +161,7 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     await notePrompt($, undefined) // a fresh conversation holds no approval
+    noteNotificationTurn(false)
     const done = await next(e)
     await refresh($).catch(() => undefined)
     // A fresh conversation (a new session, or after a clear) runs no queue
@@ -171,6 +177,9 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId !== undefined) return done
+    // The turn reading an agent's report that didn't end with an answer is the
+    // user's to look at, so a waiting advance doesn't clear it away.
+    if (noteNotificationTurn(false) && e.reason !== 'answer') cancelAdvance($, 'the agent’s report turn didn’t finish')
     await refresh($).catch(() => undefined)
     // Only a turn that ended with an answer: an interrupt, a refusal, or an
     // error is the user's to look at.
@@ -188,7 +197,14 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     await notePrompt($, e)
     // A prompt the user sends cancels a pending auto-advance (this plugin's
-    // own resubmit doesn't come through here).
+    // own resubmit doesn't come through here). A background task's
+    // notification starting a turn doesn't: auto-advance waits for that turn.
+    if (e.origin.kind === 'task-notification') {
+      // Only once it goes through and starts a turn of its own.
+      const r = await next(e)
+      if (e.turnId === undefined && !('drop' in r && r.drop)) noteNotificationTurn(true)
+      return r
+    }
     if (e.origin.kind !== 'plugin') cancelAdvance($, 'a prompt was sent')
     // `next-session` alone, between turns (not a /command, a meta prompt, or a
     // prompt queued into a running turn).
@@ -196,12 +212,20 @@ export const register: Register = on => {
     if (!m || e.command || e.isMeta || e.turnId !== undefined) return next(e)
     // Clear first only for the user's own typing (terminal or phone);
     // auto-advance clears for itself (`advance`).
+    // With Clear on and the clear blocked (a background agent still at work),
+    // it doesn't run here on top of the last session: the prompt is dropped
+    // (back to the box) with the reason, for the user to send again.
     const typed = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
-    if (typed && (await shouldClear($, m[1]).catch(() => false))) {
+    const state = typed ? await clearState($, m[1]).catch(() => 'no' as const) : 'no'
+    if (state === 'clear') {
       const text = e.text.trim()
       await clearThenRun($, text, m[1], true)
       return { drop: `Clearing the conversation, then running ${text}` }
     }
+    if (state === 'blocked')
+      return {
+        drop: `Not running ${e.text.trim()}: Clear is on, but a background agent is still running, so the conversation can't be cleared yet. Send it again once the agent finishes.`,
+      }
     // Run here, not cleared: auto-advance's baseline.
     await noteNextSession($).catch(() => undefined)
     // This plugin's own resubmit after a clear, should the engine pass it

@@ -23,9 +23,41 @@ import { activeQueues, nextRowOf, openQueues, rows, type Queue, type Row } from 
 //   five-hour window under 90%, so a session doesn't start only to hit a
 //   limit halfway. With no weekly reading (API-key billing, or no reply yet),
 //   it stops rather than guess.
+//
+// When the countdown ends while a background agent of this conversation is
+// still at work, or the turn reading an agent's report is running, it waits
+// rather than stop: the clear would lose the report, so it checks again every
+// POLL_MS, for up to WAIT_MAX_MS, and still cancels when the user types or
+// sends a prompt (a background task's notification isn't one).
 
 const FIVE_HOUR_MAX = 90
 export const DELAY_MS = 15_000
+export const POLL_MS = 15_000
+export const WAIT_MAX_MS = 30 * 60_000
+
+// Agents whose report would be lost if the conversation were cleared.
+const BUSY = new Set(['pending', 'running', 'waiting'])
+
+// How many of the session's agents are still at work; undefined on a failure
+// to read (then the clear's own check refuses).
+export async function busyAgents($: EngineInterface): Promise<number | undefined> {
+  try {
+    return (await $.agent.list()).filter(a => BUSY.has(a.status)).length
+  } catch {
+    return undefined
+  }
+}
+
+// Whether a main-loop turn is running that a background task's notification
+// started (register.ts): the agent's report being read. The wait goes on until
+// it ends, so the clear doesn't cut it off. A module variable, like `pending`.
+// Returns whether one was running.
+let notificationTurn = false
+export function noteNotificationTurn(open: boolean) {
+  const was = notificationTurn
+  notificationTurn = open
+  return was
+}
 
 const DONE = /^DONE\b/i
 export const doneIds = (text: string) => rows(text).filter(r => DONE.test(r.status)).map(r => r.id)
@@ -80,7 +112,8 @@ export async function noteNextSession($: EngineInterface, queues?: Queue[] | nul
 // The pending advance, if any: cancelled by the user typing or sending a
 // prompt (`cancelAdvance`), checked again when its timer fires. A module
 // variable: a hot reload drops it, and the advance with it.
-let pending: { gen: number; text: string; queue: string; row: string; before: readonly string[] } | undefined
+// `waitingSince`: when it began waiting for a background agent.
+let pending: { gen: number; text: string; queue: string; row: string; before: readonly string[]; waitingSince?: number } | undefined
 let gen = 0
 
 export function cancelAdvance($: EngineInterface, why: string) {
@@ -124,22 +157,52 @@ export async function afterTurn($: EngineInterface, submit: (text: string) => Pr
   $.clock.after(DELAY_MS, () => void fire($, mine, submit))
 }
 
+// What a wait is for, in a toast.
+function waitingFor(busy: number | undefined) {
+  if (busy === undefined) return 'the background agents (their list can’t be read)'
+  if (busy === 0) return 'the agent’s report'
+  return busy === 1 ? 'a background agent' : `${busy} background agents`
+}
+
 // The timer's end: still pending, the box still empty, and `decide` still
 // advancing to the same row (a setting changed since, a new claim, or
-// the usage since is seen).
+// the usage since is seen). With a background agent still at work, it stays
+// pending and looks again in POLL_MS, until WAIT_MAX_MS.
 async function fire($: EngineInterface, mine: NonNullable<typeof pending>, submit: (text: string) => Promise<unknown>) {
   if (pending?.gen !== mine.gen) return
-  pending = undefined
+  // Superseded or cancelled meanwhile (the user typed): no second toast.
+  const stop = (text: string) => {
+    if (pending?.gen !== mine.gen) return
+    pending = undefined
+    $.ui.toast(text)
+  }
   try {
     const box = await $.prompt.read().catch(() => ({ text: '' }))
-    if (box.text.trim() !== '') return $.ui.toast('session-queue: auto-advance cancelled (the prompt box has text).')
+    if (box.text.trim() !== '') return stop('session-queue: auto-advance cancelled (the prompt box has text).')
     const q = (await openQueues($)).find(o => o.name === mine.queue)
     const [usage, model] = await Promise.all([$.session.usage().catch(() => undefined), $.session.model().catch(() => '')])
     const d = q ? decide(q, mine.before, usage?.rateLimits ?? [], model) : undefined
     if (!d || !('advance' in d) || d.advance.id !== mine.row)
-      return $.ui.toast(`session-queue: auto-advance cancelled (${d && 'stop' in d ? d.stop : 'the queue changed'}).`)
+      return stop(`session-queue: auto-advance cancelled (${d && 'stop' in d ? d.stop : 'the queue changed'}).`)
+    const busy = await busyAgents($)
+    // Cancelled while reading (the user typed): nothing more to do.
+    if (pending?.gen !== mine.gen) return
+    // An agent list that can't be read counts as busy: look again.
+    if (busy !== 0 || notificationTurn) {
+      const now = await $.clock.now()
+      if (mine.waitingSince === undefined) {
+        mine.waitingSince = now
+        $.ui.toast(
+          `session-queue: auto-advance waits for ${waitingFor(busy)} to finish, then runs ${mine.row}; type in the prompt box to cancel.`,
+        )
+      } else if (now - mine.waitingSince >= WAIT_MAX_MS)
+        return stop(`session-queue: auto-advance stopped: still waiting for ${waitingFor(busy)} after ${WAIT_MAX_MS / 60_000} minutes.`)
+      $.clock.after(POLL_MS, () => void fire($, mine, submit))
+      return
+    }
+    pending = undefined
     await submit(mine.text)
   } catch {
-    $.ui.toast('session-queue: auto-advance couldn’t send next-session.')
+    stop('session-queue: auto-advance couldn’t send next-session.')
   }
 }
