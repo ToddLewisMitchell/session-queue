@@ -101,5 +101,21 @@ python3 test/test_skill.py resume skip      # run scenarios by name
 
 It needs the `claude` CLI on your PATH, and it runs on your own login: the full suite costs about $8. Sandboxes and transcripts go in `test/runs/`, which git ignores.
 
+### Description trigger check
+`test/trigger-eval.json` holds 21 prompts: 11 that should make Claude load the skill and 10 near-misses that shouldn't, such as Celery queues or a conference's "next session". It checks the skill's `description` line after an edit, using `scripts/run_eval.py` from Anthropic's skill-creator skill. Two settings matter, or the scores come out falsely low:
+
+- Run it from an empty scratch folder whose `.claude/settings.json` turns this plugin off, so the installed copy doesn't compete with the test copy: `{ "enabledPlugins": { "session-queue@session-queue": false } }`.
+- Use `--num-workers 1`. Parallel workers put their copies of the skill in the same folder, where they compete with each other.
+
+```
+cd <scratch folder>
+PYTHONPATH=<skill-creator folder> python3 -m scripts.run_eval \
+  --eval-set <repo>/test/trigger-eval.json \
+  --skill-path <repo>/skills/session-queue \
+  --model <model id> --num-workers 1 --runs-per-query 3 --timeout 90 --verbose
+```
+
+The description scored 20/21 on 2026-11-23. The only miss was "drop queue-remove from the list…", which never says "queue".
+
 ## License
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): free to share and adapt with credit, for non-commercial purposes only, under the same license. It may not be sold. See `LICENSE`.

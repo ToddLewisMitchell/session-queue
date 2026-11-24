@@ -1,0 +1,23 @@
+[
+ {"query": "next-session", "should_trigger": true},
+ {"query": "Add to the queue: make the pane show the auto-advance countdown in its footer, and grey it out while the 5-hour wait is active", "should_trigger": true},
+ {"query": "Enqueue: a README section explaining the Parallels setting. low priority, put it at the end", "should_trigger": true},
+ {"query": "show me the queue - what's still left after the commit guard stuff?", "should_trigger": true},
+ {"query": "can you move commit-guard above settings-display in queues/queue-mod.md? the display one depends on it", "should_trigger": true},
+ {"query": "pause the queue for now, i need to do some unrelated debugging this afternoon and don't want it auto-starting anything", "should_trigger": true},
+ {"query": "parallel-session 3", "should_trigger": true},
+ {"query": "turn on auto-commit for the mod queue and set Parallels to 2", "should_trigger": true},
+ {"query": "I want to do the auth rewrite as a series of separate sessions rather than one giant one - each piece discussed first, then built, then I approve the commit. can you set that up?", "should_trigger": true},
+ {"query": "drop queue-remove from the list, we decided we don't need it after all", "should_trigger": true},
+ {"query": "we're done with the test-fixes queue, every row passed. close it out", "should_trigger": true},
+ {"query": "add the send_welcome_email call to the celery queue in app/tasks.py so signup doesn't block on SMTP", "should_trigger": false},
+ {"query": "my print queue on windows 11 is stuck with a 0-page job that won't delete, how do i clear it", "should_trigger": false},
+ {"query": "write me a binary-heap priority queue in rust with decrease-key, generic over the item type", "should_trigger": false},
+ {"query": "the SQS dead-letter queue keeps filling up overnight - can you look at worker/consumer.py and figure out why messages fail", "should_trigger": false},
+ {"query": "just give me a quick checklist in chat of the steps to migrate this project from webpack to vite, don't create any files", "should_trigger": false},
+ {"query": "set up something that runs the full test suite every night at 2am and pings me if it fails", "should_trigger": false},
+ {"query": "rename hooks/queues.ts to hooks/queue-files.ts and fix all the imports that reference it", "should_trigger": false},
+ {"query": "users get logged out after 5 minutes in the next.js app, the session cookie maxAge looks wrong in lib/auth/session.ts", "should_trigger": false},
+ {"query": "what talks are in the next session after lunch? the schedule is in conference/agenda.md", "should_trigger": false},
+ {"query": "split this 2000-line PR into smaller commits I can review one at a time", "should_trigger": false}
+]
